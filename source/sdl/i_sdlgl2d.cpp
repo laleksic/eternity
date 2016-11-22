@@ -88,6 +88,8 @@ static GLuint textureid2;
 // Framebuffer texture data
 static Uint32 *framebuffer;
 static Uint32 *framebuffer2;
+static Uint32 *framebuffer3;
+static Uint32 *framebuffer4;
 
 // Bump amount used to avoid cache misses on power-of-two-sized screens
 static int bump;
@@ -184,6 +186,14 @@ void SDLGL2DVideoDriver::CopyScreen(int screen)
     {
         DrawPixels(framebuffer2, (unsigned int)video.width);
     }
+    if(screen == 2)
+    {
+        DrawPixels(framebuffer3, (unsigned int)video.width);
+    }
+    if(screen == 3)
+    {
+        DrawPixels(framebuffer4, (unsigned int)video.width);
+    }
 }
 
 //
@@ -211,12 +221,47 @@ void SDLGL2DVideoDriver::FinishUpdate()
       //GL_BindTextureIfNeeded(textureid2);
 
       // update the texture data
-      glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-                      (GLsizei)video.width, (GLsizei)video.height,
-                      GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer);
-      glTexSubImage2D(GL_TEXTURE_2D, 0, 0, (GLint)video.height,
-                      (GLsizei)video.width, (GLsizei)video.height, 
-                      GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer2);
+      switch(video.views)
+      {
+      case 1:
+          glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+              (GLsizei)video.width, (GLsizei)video.height,
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer);
+          break;
+      case 2:
+          glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+              (GLsizei)video.width, (GLsizei)video.height,
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer);
+          glTexSubImage2D(GL_TEXTURE_2D, 0, 0, (GLint)video.height,
+              (GLsizei)video.width, (GLsizei)video.height,
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer2);
+          break;
+      case 3:
+          glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+              (GLsizei)video.width, (GLsizei)video.height,
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer);
+          glTexSubImage2D(GL_TEXTURE_2D, 0, (GLint)video.width, 0,
+              (GLsizei)video.width, (GLsizei)video.height,
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer2);
+          glTexSubImage2D(GL_TEXTURE_2D, 0, 0, (GLint)video.height,
+              (GLsizei)video.width, (GLsizei)video.height,
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer3);
+          break;
+      case 4:
+          glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+              (GLsizei)video.width, (GLsizei)video.height,
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer);
+          glTexSubImage2D(GL_TEXTURE_2D, 0, (GLint)video.width, 0,
+              (GLsizei)video.width, (GLsizei)video.height,
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer2);
+          glTexSubImage2D(GL_TEXTURE_2D, 0, 0, (GLint)video.height,
+              (GLsizei)video.width, (GLsizei)video.height,
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer3);
+          glTexSubImage2D(GL_TEXTURE_2D, 0, (GLint)video.width, (GLint)video.height,
+              (GLsizei)video.width, (GLsizei)video.height,
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer4);
+          break;
+      }
    }
    else
    {
@@ -600,6 +645,8 @@ bool SDLGL2DVideoDriver::InitGraphicsMode()
    {
        framebuffer = ecalloc(Uint32 *, v_w * 4, v_h);
        framebuffer2 = ecalloc(Uint32 *, v_w * 4, v_h);
+       framebuffer3 = ecalloc(Uint32 *, v_w * 4, v_h);
+       framebuffer4 = ecalloc(Uint32 *, v_w * 4, v_h);
    }
    else
    {

@@ -184,6 +184,49 @@ static bool S_CheckSectorKill(const sector_t *earsec, const PointThinker *src)
    return false;
 }
 
+// calculate the distance to sound origin
+//  and clip it if necessary
+//
+// killough 11/98: scale coordinates down before calculations start
+// killough 12/98: use exact distance formula instead of approximation
+static bool S_GetBestDistance(camera_t *listener, const PointThinker *source, fixed_t &keyDist)
+{
+    fixed_t sx, sy;
+    fixed_t adx = 0, ady = 0, dist = 0;
+
+    if(!listener)
+        return false;
+
+    sx = source->x;
+    sy = source->y;
+
+    if(useportalgroups && listener->groupid != source->groupid)
+    {
+        // The listener and the source are not in the same subspace, so offset
+        // the sound origin so it will sound correct to the player.
+        linkoffset_t *link = P_GetLinkOffset(source->groupid, listener->groupid);
+        sx += link->x;
+        sy += link->y;
+    }
+
+    adx = D_abs((listener->x >> FRACBITS) - (sx >> FRACBITS));
+    ady = D_abs((listener->y >> FRACBITS) - (sy >> FRACBITS));
+
+    if(ady > adx)
+        dist = adx, adx = ady, ady = dist;
+
+    dist = adx ? FixedDiv(adx, finesine[(tantoangle_acc[FixedDiv(ady, adx) >> DBITS]
+        + ANG90) >> ANGLETOFINESHIFT]) : 0;
+
+    if(dist < keyDist)
+    {
+        keyDist = dist;
+        return true;
+    }
+    return false;
+}
+
+
 //
 // S_AdjustSoundParams
 //
@@ -195,11 +238,11 @@ static bool S_CheckSectorKill(const sector_t *earsec, const PointThinker *src)
 // haleyjd: added channel volume scale value
 // haleyjd: added priority scaling
 //
-static int S_AdjustSoundParams(camera_t *listener, const PointThinker *source,
+static int S_AdjustSoundParams(camera_t *listener, const PointThinker *source, fixed_t keyDist,
                                int chanvol, int chanattn, int *vol, int *sep,
                                int *pitch, int *pri, sfxinfo_t *sfx)
 {
-   fixed_t adx = 0, ady = 0, dist = 0;
+   fixed_t adx = 0, ady = 0, dist = keyDist;
    angle_t angle;
    fixed_t sx, sy;
    int attenuator = 0, basevolume;            // haleyjd
@@ -214,33 +257,18 @@ static int S_AdjustSoundParams(camera_t *listener, const PointThinker *source,
    if(!source)
       I_Error("S_AdjustSoundParams: NULL source\n");
 #endif
-   
-   // calculate the distance to sound origin
-   //  and clip it if necessary
-   //
-   // killough 11/98: scale coordinates down before calculations start
-   // killough 12/98: use exact distance formula instead of approximation
 
    sx = source->x;
    sy = source->y;
-      
+
    if(useportalgroups && listener->groupid != source->groupid)
    {
-      // The listener and the source are not in the same subspace, so offset
-      // the sound origin so it will sound correct to the player.
-      linkoffset_t *link = P_GetLinkOffset(source->groupid, listener->groupid);
-      sx += link->x;
-      sy += link->y;
+       // The listener and the source are not in the same subspace, so offset
+       // the sound origin so it will sound correct to the player.
+       linkoffset_t *link = P_GetLinkOffset(source->groupid, listener->groupid);
+       sx += link->x;
+       sy += link->y;
    }
-
-   adx = D_abs((listener->x >> FRACBITS) - (sx >> FRACBITS));
-   ady = D_abs((listener->y >> FRACBITS) - (sy >> FRACBITS));
-   
-   if(ady > adx)
-      dist = adx, adx = ady, ady = dist;
-
-   dist = adx ? FixedDiv(adx, finesine[(tantoangle_acc[FixedDiv(ady,adx) >> DBITS]
-                                        + ANG90) >> ANGLETOFINESHIFT]) : 0;   
    
    // haleyjd 05/29/06: allow per-channel volume scaling
    basevolume = (snd_SfxVolume * chanvol) / 15;
@@ -430,9 +458,9 @@ void S_StartSfxInfo(const soundparams_t &params)
    bool priority_boost = false;
    bool extcamera      = false;
    bool nocutoff       = false;
-   camera_t      playercam;
-   camera_t     *listener = &playercam;
-   sector_t     *earsec   = NULL;
+   camera_t playercam[MAXPLAYERS];
+   sector_t *earsec[MAXPLAYERS];
+   camera_t     *listener = NULL;
    sfxinfo_t    *sfx      = params.sfx;
    PointThinker *origin   = params.origin;
    Mobj *mo;
@@ -529,6 +557,24 @@ void S_StartSfxInfo(const soundparams_t &params)
    // haleyjd: setup playercam
    if(gamestate == GS_LEVEL)
    {     
+       for(int i = 0; i < MAXPLAYERS; i++)
+       {
+           if(playeringame[i] && players[i].mo)
+           {
+               playercam[i].x = players[i].mo->x;
+               playercam[i].y = players[i].mo->y;
+               playercam[i].z = players[i].mo->z;
+               playercam[i].angle = players[i].mo->angle;
+               playercam[i].groupid = players[i].mo->groupid;
+
+               earsec[i] = R_PointInSubsector(playercam[i].x, playercam[i].y)->sector;
+           }
+           else
+           {
+               earsec[i] = NULL;
+           }
+       }
+#if 0
       if(camera) // an external camera is active
       {
          playercam = *camera; // assign directly
@@ -556,17 +602,18 @@ void S_StartSfxInfo(const soundparams_t &params)
       }
 
       earsec = R_PointInSubsector(playercam.x, playercam.y)->sector;
+#endif
    }
 
    // haleyjd 09/29/06: check for sector sound kill here.
-   if(S_CheckSectorKill(earsec, origin))
+   if(S_CheckSectorKill(earsec[0], origin))
       return;
 
    // Check to see if it is audible, modify the params
    // killough 3/7/98, 4/25/98: code rearranged slightly
    // haleyjd 08/12/04: add extcamera check
    
-   if(!origin || (!extcamera && origin == players[displayplayer].mo))
+   if(!origin/* || (!extcamera && origin == players[displayplayer].mo)*/)
    {
       sep = NORM_SEP;
       volume = (volume * volumeScale) / 15; // haleyjd 05/29/06: scale volume
@@ -576,11 +623,23 @@ void S_StartSfxInfo(const soundparams_t &params)
    }
    else
    {     
+       fixed_t keyDist = INT_MAX;
+       for(int i = 0; i < MAXPLAYERS; i++)
+       {
+           if(playeringame[i])
+           {
+               if(S_GetBestDistance(&playercam[i], origin, keyDist))
+               {
+                   listener = &playercam[i];
+               }
+           }
+       }
+
       // use an external cam?
-      if(!S_AdjustSoundParams(listener, origin, volumeScale, params.attenuation,
+      if(!S_AdjustSoundParams(listener, origin, keyDist, volumeScale, params.attenuation,
                               &volume, &sep, &pitch, &priority, sfx))
          return;
-      else if(origin->x == playercam.x && origin->y == playercam.y)
+      else if(listener && origin->x == listener->x && origin->y == listener->y)
          sep = NORM_SEP;
    }
   
@@ -878,13 +937,32 @@ static void S_updateEnvironment(sector_t *earsec)
 void S_UpdateSounds(const Mobj *listener)
 {
    // sf: a camera_t holding the information about the player
-   camera_t playercam = { 0 }; 
-   sector_t *earsec = NULL;
+   camera_t playercam[MAXPLAYERS]; 
+   sector_t *earsec[MAXPLAYERS];
 
    //jff 1/22/98 return if sound is not enabled
    if(!snd_card || nosfxparm)
       return;
 
+   for(int i = 0; i < MAXPLAYERS; i++)
+   {
+       if(playeringame[i] && players[i].mo)
+       {
+           playercam[i].x = players[i].mo->x;
+           playercam[i].y = players[i].mo->y;
+           playercam[i].z = players[i].mo->z;
+           playercam[i].angle = players[i].mo->angle;
+           playercam[i].groupid = players[i].mo->groupid;
+
+           earsec[i] = R_PointInSubsector(playercam[i].x, playercam[i].y)->sector;
+       }
+       else
+       {
+           earsec[i] = NULL;
+       }
+   }
+
+#if 0
    if(listener)
    {
       // haleyjd 08/12/04: fix possible bugs with external cameras
@@ -902,9 +980,10 @@ void S_UpdateSounds(const Mobj *listener)
       }
       earsec = R_PointInSubsector(playercam.x, playercam.y)->sector;
    }
+#endif
 
    // update sound environment
-   S_updateEnvironment(earsec);
+   S_updateEnvironment(earsec[0]);
 
    // now update each individual channel
    for(int cnum = 0; cnum < numChannels; cnum++)
@@ -942,14 +1021,28 @@ void S_UpdateSounds(const Mobj *listener)
          // inappropriately. The only reason he changed this was to get to
          // the code in S_AdjustSoundParams that checks for sector sound
          // killing. We do that here now instead.
-         if(listener && S_CheckSectorKill(earsec, c->origin))
+         if(listener && S_CheckSectorKill(earsec[0], c->origin))
             S_StopChannel(cnum);
          else if(c->origin && (PointThinker *)listener != c->origin) // killough 3/20/98
          {
+             fixed_t keyDist = INT_MAX;
+             camera_t *keyCam = NULL;
+             for(int i = 0; i < MAXPLAYERS; i++)
+             {
+                 if(playeringame[i])
+                 {
+                     if(S_GetBestDistance(&playercam[i], c->origin, keyDist))
+                     {
+                         keyCam = &playercam[i];
+                     }
+                 }
+             }
+
             // haleyjd 05/29/06: allow per-channel volume scaling
             // and attenuation type selection
-            if(!S_AdjustSoundParams(listener ? &playercam : NULL,
+            if(!S_AdjustSoundParams(keyCam,
                                     c->origin,
+                                    keyDist,
                                     c->volume,
                                     c->attenuation,
                                     &volume, &sep, &pitch, &pri, sfx))

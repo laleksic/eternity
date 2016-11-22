@@ -72,6 +72,7 @@ cb_video_t video =
    FRACUNIT,
    1.0f, 1.0f, 1.0f, 1.0f, 
    false,
+   1,
    {NULL, NULL, NULL, NULL}
 };
 
@@ -459,6 +460,28 @@ static void V_InitScreenVBuffer()
    V_initSubScreen43();
 }
 
+void V_InitSplitscreen()
+{
+    int players = 1;
+    for(int i = 1; i < MAXPLAYERS; i++)
+    {
+        if(playeringame[i])
+            players++;
+    }
+
+    switch(players)
+    {
+    case 3:
+    case 4:
+        video.width /= 2;
+    case 2:
+        video.height /= 2;
+        break;
+    }
+
+    video.views = players;
+}
+
 //
 // V_Init
 //
@@ -469,7 +492,7 @@ void V_Init()
 {
    static byte *s = NULL;
 
-   video.height /= 2;
+   V_InitSplitscreen();
    
    int size = video.width * video.height;
 

@@ -149,6 +149,7 @@ typedef struct cb_video_s
    float       xscalef, yscalef;
    float       xstepf, ystepf;
    bool        scaled; // SoM: should be set when the scale values are
+   int         views; // Number of player view points
 
    byte        *screens[4];
 

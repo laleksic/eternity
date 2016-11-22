@@ -582,8 +582,13 @@ void D_Display()
    // save the current screen if about to wipe
    // no melting consoles
    if(gamestate != wipegamestate &&
-      !(wipegamestate == GS_CONSOLE && gamestate != GS_LEVEL))
-      Wipe_StartScreen();
+       !(wipegamestate == GS_CONSOLE && gamestate != GS_LEVEL))
+   {
+       I_SetMode();
+           Wipe_StartScreen();
+   }
+
+      
 
    int oldDisplayPlayer = displayplayer;
 
