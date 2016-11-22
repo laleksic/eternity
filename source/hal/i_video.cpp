@@ -190,6 +190,15 @@ void I_FinishUpdate()
 }
 
 //
+// I_FinishUpdate
+//
+void I_NextScreen(int screen)
+{
+    if(!noblit && in_graphics_mode)
+        i_video_driver->CopyScreen(screen);
+}
+
+//
 // I_ReadScreen
 //
 void I_ReadScreen(byte *scr)

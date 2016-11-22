@@ -83,9 +83,11 @@ static GLfloat texcoord_tmax;
 
 // GL texture names
 static GLuint textureid;
+static GLuint textureid2;
 
 // Framebuffer texture data
 static Uint32 *framebuffer;
+static Uint32 *framebuffer2;
 
 // Bump amount used to avoid cache misses on power-of-two-sized screens
 static int bump;
@@ -172,6 +174,18 @@ void SDLGL2DVideoDriver::DrawPixels(void *buffer, unsigned int destwidth)
    }
 }
 
+void SDLGL2DVideoDriver::CopyScreen(int screen)
+{
+    if(screen == 0)
+    {
+        DrawPixels(framebuffer, (unsigned int)video.width);
+    }
+    if(screen == 1)
+    {
+        DrawPixels(framebuffer2, (unsigned int)video.width);
+    }
+}
+
 //
 // SDLGL2DVideoDriver::FinishUpdate
 //
@@ -189,15 +203,20 @@ void SDLGL2DVideoDriver::FinishUpdate()
    if(!use_arb_pbo)
    {
       // Convert the game's 8-bit output to the 32-bit texture buffer
-      DrawPixels(framebuffer, (unsigned int)video.width);
+      //DrawPixels(framebuffer, (unsigned int)video.width);
+      //DrawPixels(framebuffer2, (unsigned int)video.width);
 
       // bind the framebuffer texture if necessary
       GL_BindTextureIfNeeded(textureid);
+      //GL_BindTextureIfNeeded(textureid2);
 
       // update the texture data
-      glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 
-                      (GLsizei)video.width, (GLsizei)video.height, 
+      glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                      (GLsizei)video.width, (GLsizei)video.height,
                       GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer);
+      glTexSubImage2D(GL_TEXTURE_2D, 0, 0, (GLint)video.height,
+                      (GLsizei)video.width, (GLsizei)video.height, 
+                      GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer2);
    }
    else
    {
@@ -578,7 +597,10 @@ bool SDLGL2DVideoDriver::InitGraphicsMode()
 
    // Allocate framebuffer data, or PBOs
    if(!use_arb_pbo)
-      framebuffer = ecalloc(Uint32 *, v_w * 4, v_h);
+   {
+       framebuffer = ecalloc(Uint32 *, v_w * 4, v_h);
+       framebuffer2 = ecalloc(Uint32 *, v_w * 4, v_h);
+   }
    else
    {
       pglGenBuffersARB(2, pboIDs);

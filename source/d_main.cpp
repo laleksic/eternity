@@ -585,136 +585,148 @@ void D_Display()
       !(wipegamestate == GS_CONSOLE && gamestate != GS_LEVEL))
       Wipe_StartScreen();
 
-   // haleyjd 07/15/2012: draw "wings" (or pillars) to fill in missing bits
-   // created by drawing patches 4:3 in higher aspect ratios.
-   D_DrawWings();
+   int oldDisplayPlayer = displayplayer;
 
-   // haleyjd: optimization for fullscreen menu drawing -- no
-   // need to do all this if the menus are going to cover it up :)
-   if(!MN_CheckFullScreen())
+   for(int i = 0; i < MAXPLAYERS; i++)
    {
-      switch(gamestate)                // do buffered drawing
-      {
-      case GS_LEVEL:
-         // see if the border needs to be initially drawn
-         if(oldgamestate != GS_LEVEL)
-            R_FillBackScreen(scaledwindow); // draw the pattern into the back screen
-         
-         if(automapactive)
-         {
-            AM_Drawer();
-         }
-         else
-         {
-            R_DrawViewBorder();    // redraw border
-            R_RenderPlayerView(&players[displayplayer], camera);
-         }
-         
-         ST_Drawer(scaledwindow.height == SCREENHEIGHT);  // killough 11/98
-         HU_Drawer();
-         break;
-      case GS_INTERMISSION:
-         IN_Drawer();
-         break;
-      case GS_FINALE:
-         F_Drawer();
-         break;
-      case GS_DEMOSCREEN:
-         D_PageDrawer();
-         break;
-      case GS_CONSOLE:
-         break;
-      default:
-         break;
-      }
-         
-      // clean up border stuff
-      if(gamestate != oldgamestate && gamestate != GS_LEVEL)
-         I_SetPalette((byte *)(wGlobalDir.cacheLumpName("PLAYPAL", PU_CACHE)));
-      
-      oldgamestate = wipegamestate = gamestate;
-         
-      // draw pause pic
-      if(paused && !walkcam_active) // sf: not if walkcam active for
-      {                             // frads taking screenshots
-         const char *lumpname = GameModeInfo->pausePatch; 
-         
-         // haleyjd 03/12/03: changed to work
-         // in heretic, and with user pause patches
-         patch_t *patch = PatchLoader::CacheName(wGlobalDir, lumpname, PU_CACHE);
-         int width = patch->width;
-         int x = (SCREENWIDTH - width) / 2 + patch->leftoffset;
-         // SoM 2-4-04: ANYRES
-         int y = 4 + (automapactive ? 0 : scaledwindow.y);
-         
-         V_DrawPatch(x, y, &subscreen43, patch);
-      }
+       displayplayer = i;
 
-      if(inwipe)
-      {
-         bool wait = (wipewait == 1 || (wipewait == 2 && demoplayback));
-         
-         // about to start wiping; if wipewait is enabled, save everything 
-         // that was just drawn
-         if(wait)
-         {
-            Wipe_SaveEndScreen();
-            
-            do
-            {
-               int starttime = i_haltimer.GetTime();
-               int tics = 0;
-               
-               Wipe_Drawer();
-               
-               do
+       // haleyjd 07/15/2012: draw "wings" (or pillars) to fill in missing bits
+       // created by drawing patches 4:3 in higher aspect ratios.
+       D_DrawWings();
+
+       // haleyjd: optimization for fullscreen menu drawing -- no
+       // need to do all this if the menus are going to cover it up :)
+       if(!MN_CheckFullScreen())
+       {
+           switch(gamestate)                // do buffered drawing
+           {
+           case GS_LEVEL:
+               if(!players[displayplayer].mo)
+                   break;
+
+               // see if the border needs to be initially drawn
+               if(oldgamestate != GS_LEVEL)
+                   R_FillBackScreen(scaledwindow); // draw the pattern into the back screen
+
+               if(automapactive)
                {
-                  tics = i_haltimer.GetTime() - starttime;
-
-                  // haleyjd 06/16/09: sleep to avoid hogging 100% CPU
-                  i_haltimer.Sleep(1);
+                   AM_Drawer();
                }
-               while(!tics);
-               
-               Wipe_Ticker();
-               
-               C_Drawer();
-               MN_Drawer();
-               NetUpdate();
-               if(v_ticker)
-                  V_FPSDrawer();
-               I_FinishUpdate();
-               
-               if(inwipe)
-                  Wipe_BlitEndScreen();
-            }
-            while(inwipe);
-         }
-         else
-            Wipe_Drawer();
-      }
+               else
+               {
+                   R_DrawViewBorder();    // redraw border
+                   R_RenderPlayerView(&players[displayplayer], camera);
+               }
 
-      C_Drawer();
+               ST_Drawer(scaledwindow.height == SCREENHEIGHT);  // killough 11/98
+               HU_Drawer();
+               break;
+           case GS_INTERMISSION:
+               IN_Drawer();
+               break;
+           case GS_FINALE:
+               F_Drawer();
+               break;
+           case GS_DEMOSCREEN:
+               D_PageDrawer();
+               break;
+           case GS_CONSOLE:
+               break;
+           default:
+               break;
+           }
 
-   } // if(!MN_CheckFullScreen())
+           // clean up border stuff
+           if(gamestate != oldgamestate && gamestate != GS_LEVEL)
+               I_SetPalette((byte *)(wGlobalDir.cacheLumpName("PLAYPAL", PU_CACHE)));
 
-   // menus go directly to the screen
-   MN_Drawer();         // menu is drawn even on top of everything
-   NetUpdate();         // send out any new accumulation
-   
-   //sf : now system independent
-   if(v_ticker)
-      V_FPSDrawer();
+           oldgamestate = wipegamestate = gamestate;
 
-   if(d_drawfps)
-      D_showDrawnFPS();
+           // draw pause pic
+           if(paused && !walkcam_active) // sf: not if walkcam active for
+           {                             // frads taking screenshots
+               const char *lumpname = GameModeInfo->pausePatch;
+
+               // haleyjd 03/12/03: changed to work
+               // in heretic, and with user pause patches
+               patch_t *patch = PatchLoader::CacheName(wGlobalDir, lumpname, PU_CACHE);
+               int width = patch->width;
+               int x = (SCREENWIDTH - width) / 2 + patch->leftoffset;
+               // SoM 2-4-04: ANYRES
+               int y = 4 + (automapactive ? 0 : scaledwindow.y);
+
+               V_DrawPatch(x, y, &subscreen43, patch);
+           }
+
+           if(inwipe)
+           {
+               bool wait = (wipewait == 1 || (wipewait == 2 && demoplayback));
+
+               // about to start wiping; if wipewait is enabled, save everything 
+               // that was just drawn
+               if(wait)
+               {
+                   Wipe_SaveEndScreen();
+
+                   do
+                   {
+                       int starttime = i_haltimer.GetTime();
+                       int tics = 0;
+
+                       Wipe_Drawer();
+
+                       do
+                       {
+                           tics = i_haltimer.GetTime() - starttime;
+
+                           // haleyjd 06/16/09: sleep to avoid hogging 100% CPU
+                           i_haltimer.Sleep(1);
+                       } while(!tics);
+
+                       Wipe_Ticker();
+
+                       C_Drawer();
+                       MN_Drawer();
+                       NetUpdate();
+                       if(v_ticker)
+                           V_FPSDrawer();
+                       I_FinishUpdate();
+
+                       if(inwipe)
+                           Wipe_BlitEndScreen();
+                   } while(inwipe);
+               }
+               else
+                   Wipe_Drawer();
+           }
+
+           C_Drawer();
+
+       } // if(!MN_CheckFullScreen())
+
+       // menus go directly to the screen
+       MN_Drawer();         // menu is drawn even on top of everything
+       NetUpdate();         // send out any new accumulation
+
+       //sf : now system independent
+       if(v_ticker)
+           V_FPSDrawer();
+
+       if(d_drawfps)
+           D_showDrawnFPS();
 
 #ifdef INSTRUMENTED
-   if(printstats)
-      D_showMemStats();
+       if(printstats)
+           D_showMemStats();
 #endif
+
+       I_NextScreen(i);
+   }
    
    I_FinishUpdate();              // page flip or blit buffer
+
+   displayplayer = oldDisplayPlayer;
 
    i_haltimer.EndDisplay();
 }

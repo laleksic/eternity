@@ -468,6 +468,8 @@ static void V_InitScreenVBuffer()
 void V_Init()
 {
    static byte *s = NULL;
+
+   video.height /= 2;
    
    int size = video.width * video.height;
 
