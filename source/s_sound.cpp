@@ -613,7 +613,7 @@ void S_StartSfxInfo(const soundparams_t &params)
    // killough 3/7/98, 4/25/98: code rearranged slightly
    // haleyjd 08/12/04: add extcamera check
    
-   if(!origin/* || (!extcamera && origin == players[displayplayer].mo)*/)
+   if(!origin || (!extcamera && origin == players[displayplayer].mo))
    {
       sep = NORM_SEP;
       volume = (volume * volumeScale) / 15; // haleyjd 05/29/06: scale volume
