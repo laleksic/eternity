@@ -86,10 +86,7 @@ static GLuint textureid;
 static GLuint textureid2;
 
 // Framebuffer texture data
-static Uint32 *framebuffer;
-static Uint32 *framebuffer2;
-static Uint32 *framebuffer3;
-static Uint32 *framebuffer4;
+static Uint32 *framebuffer[4];
 
 // Bump amount used to avoid cache misses on power-of-two-sized screens
 static int bump;
@@ -178,21 +175,9 @@ void SDLGL2DVideoDriver::DrawPixels(void *buffer, unsigned int destwidth)
 
 void SDLGL2DVideoDriver::CopyScreen(int screen)
 {
-    if(screen == 0)
+    if(screen >= 0 && screen <= 3)
     {
-        DrawPixels(framebuffer, (unsigned int)video.width);
-    }
-    if(screen == 1)
-    {
-        DrawPixels(framebuffer2, (unsigned int)video.width);
-    }
-    if(screen == 2)
-    {
-        DrawPixels(framebuffer3, (unsigned int)video.width);
-    }
-    if(screen == 3)
-    {
-        DrawPixels(framebuffer4, (unsigned int)video.width);
+        DrawPixels(framebuffer[screen], (unsigned int)video.width);
     }
 }
 
@@ -226,40 +211,40 @@ void SDLGL2DVideoDriver::FinishUpdate()
       case 1:
           glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
               (GLsizei)video.width, (GLsizei)video.height,
-              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer);
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer[0]);
           break;
       case 2:
           glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
               (GLsizei)video.width, (GLsizei)video.height,
-              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer);
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer[0]);
           glTexSubImage2D(GL_TEXTURE_2D, 0, 0, (GLint)video.height,
               (GLsizei)video.width, (GLsizei)video.height,
-              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer2);
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer[1]);
           break;
       case 3:
           glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
               (GLsizei)video.width, (GLsizei)video.height,
-              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer);
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer[0]);
           glTexSubImage2D(GL_TEXTURE_2D, 0, (GLint)video.width, 0,
               (GLsizei)video.width, (GLsizei)video.height,
-              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer2);
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer[1]);
           glTexSubImage2D(GL_TEXTURE_2D, 0, 0, (GLint)video.height,
               (GLsizei)video.width, (GLsizei)video.height,
-              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer3);
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer[2]);
           break;
       case 4:
           glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
               (GLsizei)video.width, (GLsizei)video.height,
-              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer);
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer[0]);
           glTexSubImage2D(GL_TEXTURE_2D, 0, (GLint)video.width, 0,
               (GLsizei)video.width, (GLsizei)video.height,
-              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer2);
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer[1]);
           glTexSubImage2D(GL_TEXTURE_2D, 0, 0, (GLint)video.height,
               (GLsizei)video.width, (GLsizei)video.height,
-              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer3);
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer[2]);
           glTexSubImage2D(GL_TEXTURE_2D, 0, (GLint)video.width, (GLint)video.height,
               (GLsizei)video.width, (GLsizei)video.height,
-              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer4);
+              GL_BGRA, GL_UNSIGNED_BYTE, (GLvoid *)framebuffer[3]);
           break;
       }
    }
@@ -410,33 +395,36 @@ void SDLGL2DVideoDriver::ShutdownGraphics()
 // SDLGL2DVideoDriver::ShutdownGraphicsPartway
 //
 void SDLGL2DVideoDriver::ShutdownGraphicsPartway()
-{   
-   // haleyjd 06/21/06: use UpdateGrab here, not release
-   UpdateGrab();
+{
+    // haleyjd 06/21/06: use UpdateGrab here, not release
+    UpdateGrab();
 
-   // Code to allow changing resolutions in OpenGL.
-   // Must shutdown everything.
-   
-   // Delete textures and clear names 
-   if(textureid)
-   {
-      glDeleteTextures(1, &textureid);
-      textureid = 0;
-   }
+    // Code to allow changing resolutions in OpenGL.
+    // Must shutdown everything.
 
-   // Destroy any PBOs
-   if(pboIDs[0])
-   {
-      pglDeleteBuffersARB(2, pboIDs);
-      memset(pboIDs, 0, sizeof(pboIDs));
-   }
+    // Delete textures and clear names 
+    if(textureid)
+    {
+        glDeleteTextures(1, &textureid);
+        textureid = 0;
+    }
 
-   // Destroy the allocated temporary framebuffer
-   if(framebuffer)
-   {
-      efree(framebuffer);
-      framebuffer = NULL;
-   }
+    // Destroy any PBOs
+    if(pboIDs[0])
+    {
+        pglDeleteBuffersARB(2, pboIDs);
+        memset(pboIDs, 0, sizeof(pboIDs));
+    }
+
+    // Destroy the allocated temporary framebuffer
+    for(int i = 0; i < 4; i++)
+    {
+        if(framebuffer[i])
+        {
+            efree(framebuffer[i]);
+            framebuffer[i] = NULL;
+        }
+    }
 
    // Destroy the "primary buffer" screen surface
    UnsetPrimaryBuffer();
@@ -643,10 +631,10 @@ bool SDLGL2DVideoDriver::InitGraphicsMode()
    // Allocate framebuffer data, or PBOs
    if(!use_arb_pbo)
    {
-       framebuffer = ecalloc(Uint32 *, v_w * 4, v_h);
-       framebuffer2 = ecalloc(Uint32 *, v_w * 4, v_h);
-       framebuffer3 = ecalloc(Uint32 *, v_w * 4, v_h);
-       framebuffer4 = ecalloc(Uint32 *, v_w * 4, v_h);
+       framebuffer[0] = ecalloc(Uint32 *, v_w * 4, v_h);
+       framebuffer[1] = ecalloc(Uint32 *, v_w * 4, v_h);
+       framebuffer[2] = ecalloc(Uint32 *, v_w * 4, v_h);
+       framebuffer[3] = ecalloc(Uint32 *, v_w * 4, v_h);
    }
    else
    {
