@@ -3508,7 +3508,7 @@ void doom_printf(const char *s, ...)
    va_end(v);
    
    C_Puts(msg);  // set new message
-   HU_PlayerMsg(msg);
+   HU_PlayerMsg(0, msg);
 }
 
 //
@@ -3526,10 +3526,11 @@ void player_printf(player_t *player, const char *s, ...)
    pvsnprintf(msg, sizeof(msg), s, v); // print message in buffer
    va_end(v);
    
-   if(player == &players[consoleplayer])
+   //if(player == &players[consoleplayer])
    {
       C_Puts(msg);  // set new message
-      HU_PlayerMsg(msg);
+      int pnum = (player - players);
+      HU_PlayerMsg(pnum, msg);
    }
 }
 

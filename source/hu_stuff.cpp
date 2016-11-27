@@ -363,12 +363,12 @@ bool HU_Responder(event_t *ev)
 class HUDMessageWidget : public HUDWidget
 {
 protected:
-   char messages[MAXHUDMESSAGES][MAXHUDMSGLEN]; // messages
-   int  current_messages;                       // number of messages
-   int  scrolltime;                             // leveltime when message will scroll up
+   char messages[MAXPLAYERS][MAXHUDMESSAGES][MAXHUDMSGLEN]; // messages
+   int  current_messages[MAXPLAYERS];                       // number of messages
+   int  scrolltime[MAXPLAYERS];                             // leveltime when message will scroll up
 
 public:
-   void addMessage(const char *s);
+   void addMessage(int pnum, const char *s);
 
    virtual void ticker();
    virtual void drawer();
@@ -396,15 +396,18 @@ void HUDMessageWidget::ticker()
    if(!hud_msg_scrollup)
       return;
 
-   // move up messages
-   if(leveltime >= scrolltime)
+   for(int pnum = 0; pnum < MAXPLAYERS; pnum++)
    {
-      for(int i = 0; i < current_messages - 1; i++)
-         strncpy(messages[i], messages[i + 1], MAXHUDMSGLEN);
+       // move up messages
+       if(leveltime >= scrolltime[pnum])
+       {
+           for(int i = 0; i < current_messages[pnum] - 1; i++)
+               strncpy(messages[pnum][i], messages[pnum][i + 1], MAXHUDMSGLEN);
 
-      if(current_messages)
-         --current_messages;
-      scrolltime = leveltime + (message_timer * 35) / 1000;
+           if(current_messages[pnum])
+               --current_messages[pnum];
+           scrolltime[pnum] = leveltime + (message_timer * 35) / 1000;
+       }
    }
 }
 
@@ -428,9 +431,9 @@ void HUDMessageWidget::drawer()
    // go down a bit if chat active
    vtd.y = chat_active ? hud_font->absh : 0;
    
-   for(int i = 0; i < current_messages; i++)
+   for(int i = 0; i < current_messages[displayplayer]; i++)
    {
-      char *msg = messages[i];
+      char *msg = messages[displayplayer][i];
       
       // haleyjd 12/26/02: center messages in proper gamemodes
       // haleyjd 08/26/12: center also if in widescreen modes
@@ -458,7 +461,8 @@ void HUDMessageWidget::drawer()
 //
 void HUDMessageWidget::clear()
 {
-   current_messages = 0;
+    for(int pnum = 0; pnum < MAXPLAYERS; pnum++)
+       current_messages[displayplayer] = 0;
 }
 
 //
@@ -466,29 +470,29 @@ void HUDMessageWidget::clear()
 //
 // Add a message to the message widget.
 //
-void HUDMessageWidget::addMessage(const char *s)
+void HUDMessageWidget::addMessage(int pnum, const char *s)
 {
    char *dest;
 
-   if(current_messages == hud_msg_lines) // display full
+   if(current_messages[pnum] == hud_msg_lines) // display full
    {
       // scroll up      
       for(int i = 0; i < hud_msg_lines - 1; i++)
-         strncpy(messages[i], messages[i+1], MAXHUDMSGLEN);
+         strncpy(messages[pnum][i], messages[pnum][i+1], MAXHUDMSGLEN);
       
-      dest = messages[hud_msg_lines - 1];
+      dest = messages[pnum][hud_msg_lines - 1];
    }
    else 
    {
       // add one to the end
-      dest = messages[current_messages];
-      ++current_messages;
+      dest = messages[pnum][current_messages[pnum]];
+      ++current_messages[pnum];
    }
 
    psnprintf(dest, MAXHUDMSGLEN, "%s", s);
    V_FontFitTextToRect(hud_font, dest, 0, 0, 320, 200);
 
-   scrolltime = leveltime + (message_timer * 35) / 1000;
+   scrolltime[pnum] = leveltime + (message_timer * 35) / 1000;
 }
 
 //
@@ -515,9 +519,9 @@ static void HU_InitMsgWidget()
 //
 // Adds a new message to the player.
 //
-void HU_PlayerMsg(const char *s)
+void HU_PlayerMsg(int pnum, const char *s)
 {
-   msg_widget.addMessage(s);
+   msg_widget.addMessage(pnum, s);
 }
 
 //=============================================================================
