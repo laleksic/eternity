@@ -139,7 +139,7 @@ char    *usergamepath;            // haleyjd 02/05/12: path of user/game directo
 
 void D_CheckNetGame(void);
 void D_ProcessEvents(void);
-void G_BuildTiccmd(ticcmd_t* cmd);
+void G_BuildTiccmd(ticcmd_t* cmd, int pnum);
 void D_DoAdvanceDemo(void);
 
 void usermsg(const char *s, ...)
@@ -1359,7 +1359,7 @@ static void D_DoomInit()
    fastparm    = clfastparm    = !!M_CheckParm("-fast");
    // jff 1/24/98 end of set to both working and command line value
 
-   DefaultGameType = gt_single;
+   DefaultGameType = gt_coop;
 
    if(M_CheckParm("-deathmatch"))
    {

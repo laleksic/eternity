@@ -152,6 +152,7 @@ bool I_SelectDefaultGamePad();
 void I_InitGamePads();
 void I_ShutdownGamePads();
 HALGamePad::padstate_t *I_PollActiveGamePad();
+HALGamePad::padstate_t *I_PollGamePad(int pad);
 
 size_t I_GetNumGamePads();
 HALGamePad *I_GetGamePad(size_t index);

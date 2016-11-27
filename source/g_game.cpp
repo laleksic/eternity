@@ -196,7 +196,7 @@ bool    dclickstate2;
 int     dclicks2;
 
 // joystick values are repeated
-double joyaxes[axis_max];
+double joyaxes[axis_max][MAXPLAYERS];
 
 int  savegameslot;
 char savedescription[32];
@@ -218,7 +218,7 @@ int cooldemo_tics;      // number of tics until changing view
 
 void G_CoolViewPoint();
 
-static bool gameactions[NUMKEYACTIONS];
+static bool gameactions[NUMKEYACTIONS][MAXPLAYERS];
 
 //
 // G_BuildTiccmd
@@ -230,7 +230,7 @@ static bool gameactions[NUMKEYACTIONS];
 // NETCODE_FIXME: The ticcmd_t structure will probably need to be
 // altered to better support command packing.
 //
-void G_BuildTiccmd(ticcmd_t *cmd)
+void G_BuildTiccmd(ticcmd_t *cmd, int pnum)
 {
    bool sendcenterview = false;
    int speed;
@@ -244,22 +244,22 @@ void G_BuildTiccmd(ticcmd_t *cmd)
    static int prevmlook = 0;
    ticcmd_t *base;
    double tmousex, tmousey;     // local mousex, mousey
-   playerclass_t *pc = players[consoleplayer].pclass;
+   playerclass_t *pc = players[pnum].pclass;
 
    base = I_BaseTiccmd();    // empty, or external driver
    memcpy(cmd, base, sizeof(*cmd));
 
-   cmd->consistency = consistency[consoleplayer][maketic%BACKUPTICS];
+   cmd->consistency = consistency[pnum][maketic%BACKUPTICS];
 
    if(autorun)
-      speed = !(runiswalk && gameactions[ka_speed]);
+      speed = !(runiswalk && gameactions[ka_speed][pnum]);
    else
-      speed = gameactions[ka_speed];
+      speed = gameactions[ka_speed][pnum];
 
    forward = side = 0;
 
    // use two stage accelerative turning on the keyboard and joystick
-   if(gameactions[ka_right] || gameactions[ka_left])
+   if(gameactions[ka_right][pnum] || gameactions[ka_left][pnum])
       turnheld += ticdup;
    else
       turnheld = 0;
@@ -270,61 +270,61 @@ void G_BuildTiccmd(ticcmd_t *cmd)
       tspeed = speed;
 
    // turn 180 degrees in one keystroke? -- phares
-   if(gameactions[ka_flip])
+   if(gameactions[ka_flip][pnum])
    {
       cmd->angleturn += (int16_t)QUICKREVERSE;
-      gameactions[ka_flip] = false;
+      gameactions[ka_flip][pnum] = false;
    }
 
    // let movement keys cancel each other out
-   if(gameactions[ka_strafe])
+   if(gameactions[ka_strafe][pnum])
    {
-      if(gameactions[ka_right])
+      if(gameactions[ka_right][pnum])
          side += pc->sidemove[speed];
-      if(gameactions[ka_left])
+      if(gameactions[ka_left][pnum])
          side -= pc->sidemove[speed];
       
       // analog axes: turn becomes stafe if strafe-on is held
-      side += (int)(pc->sidemove[speed] * joyaxes[axis_turn]);
+      side += (int)(pc->sidemove[speed] * joyaxes[axis_turn][pnum]);
    }
    else
    {
-      if(gameactions[ka_right])
+      if(gameactions[ka_right][pnum])
          cmd->angleturn -= (int16_t)pc->angleturn[tspeed];
-      if(gameactions[ka_left])
+      if(gameactions[ka_left][pnum])
          cmd->angleturn += (int16_t)pc->angleturn[tspeed];
 
-      cmd->angleturn -= (int16_t)(pc->angleturn[speed] * joyaxes[axis_turn]);
+      cmd->angleturn -= (int16_t)(pc->angleturn[speed] * joyaxes[axis_turn][pnum]);
    }
 
    // gamepad dedicated analog strafe axis applies regardless
-   side += (int)(pc->sidemove[speed] * joyaxes[axis_strafe]);
+   side += (int)(pc->sidemove[speed] * joyaxes[axis_strafe][pnum]);
 
-   if(gameactions[ka_forward])
+   if(gameactions[ka_forward][pnum])
       forward += pc->forwardmove[speed];
-   if(gameactions[ka_backward])
+   if(gameactions[ka_backward][pnum])
       forward -= pc->forwardmove[speed];
 
    // analog movement axis
-   forward += (int)(pc->forwardmove[speed] * joyaxes[axis_move]);
+   forward += (int)(pc->forwardmove[speed] * joyaxes[axis_move][pnum]);
 
-   if(gameactions[ka_moveright])
+   if(gameactions[ka_moveright][pnum])
       side += pc->sidemove[speed];
-   if(gameactions[ka_moveleft])
+   if(gameactions[ka_moveleft][pnum])
       side -= pc->sidemove[speed];
    
-   if(gameactions[ka_jump])                // -- joek 12/22/07
+   if(gameactions[ka_jump][pnum])                // -- joek 12/22/07
       cmd->actions |= AC_JUMP;
    
-   mlook = allowmlook && (gameactions[ka_mlook] || automlook);
+   mlook = allowmlook && (gameactions[ka_mlook][pnum] || automlook);
 
    // console commands
    cmd->chatchar = C_dequeueChatChar();
 
-   if(gameactions[ka_attack])
+   if(gameactions[ka_attack][pnum])
       cmd->buttons |= BT_ATTACK;
 
-   if(gameactions[ka_use])
+   if(gameactions[ka_use][pnum])
       cmd->buttons |= BT_USE;
 
    // phares:
@@ -350,22 +350,22 @@ void G_BuildTiccmd(ticcmd_t *cmd)
    //
  
    if((!demo_compatibility && players[consoleplayer].attackdown &&
-       !P_CheckAmmo(&players[consoleplayer])) || gameactions[ka_nextweapon])
+       !P_CheckAmmo(&players[consoleplayer])) || gameactions[ka_nextweapon][pnum])
    {
       newweapon = P_SwitchWeapon(&players[consoleplayer]); // phares
    }
    else
    {                                 // phares 02/26/98: Added gamemode checks
       newweapon =
-        gameactions[ka_weapon1] ? wp_fist :    // killough 5/2/98: reformatted
-        gameactions[ka_weapon2] ? wp_pistol :
-        gameactions[ka_weapon3] ? wp_shotgun :
-        gameactions[ka_weapon4] ? wp_chaingun :
-        gameactions[ka_weapon5] ? wp_missile :
-        gameactions[ka_weapon6] && GameModeInfo->id != shareware ? wp_plasma :
-        gameactions[ka_weapon7] && GameModeInfo->id != shareware ? wp_bfg :
-        gameactions[ka_weapon8] ? wp_chainsaw :
-        gameactions[ka_weapon9] && enable_ssg ? wp_supershotgun :
+        gameactions[ka_weapon1][pnum] ? wp_fist :    // killough 5/2/98: reformatted
+        gameactions[ka_weapon2][pnum] ? wp_pistol :
+        gameactions[ka_weapon3][pnum] ? wp_shotgun :
+        gameactions[ka_weapon4][pnum] ? wp_chaingun :
+        gameactions[ka_weapon5][pnum] ? wp_missile :
+        gameactions[ka_weapon6][pnum] && GameModeInfo->id != shareware ? wp_plasma :
+        gameactions[ka_weapon7][pnum] && GameModeInfo->id != shareware ? wp_bfg :
+        gameactions[ka_weapon8][pnum] ? wp_chainsaw :
+        gameactions[ka_weapon9][pnum] && enable_ssg ? wp_supershotgun :
         wp_nochange;
 
       // killough 3/22/98: For network and demo consistency with the
@@ -419,9 +419,9 @@ void G_BuildTiccmd(ticcmd_t *cmd)
    }
 
    // haleyjd 03/06/09: next/prev weapon actions
-   if(gameactions[ka_weaponup])
+   if(gameactions[ka_weaponup][pnum])
       newweapon = P_NextWeapon(&players[consoleplayer]);
-   else if(gameactions[ka_weapondown])
+   else if(gameactions[ka_weapondown][pnum])
       newweapon = P_PrevWeapon(&players[consoleplayer]);
 
    if(newweapon != wp_nochange)
@@ -521,13 +521,13 @@ void G_BuildTiccmd(ticcmd_t *cmd)
    prevmlook = mlook;
 
    // analog gamepad look
-   look += (int)(pc->lookspeed[1] * joyaxes[axis_look] * (invert_padlook ? -1.0 : 1.0));
+   look += (int)(pc->lookspeed[1] * joyaxes[axis_look][pnum] * (invert_padlook ? -1.0 : 1.0));
    
-   if(gameactions[ka_lookup])
+   if(gameactions[ka_lookup][pnum])
       look += pc->lookspeed[speed];
-   if(gameactions[ka_lookdown])
+   if(gameactions[ka_lookdown][pnum])
       look -= pc->lookspeed[speed];
-   if(gameactions[ka_center])
+   if(gameactions[ka_center][pnum])
       sendcenterview = true;
 
    // haleyjd: special value for view centering
@@ -542,23 +542,23 @@ void G_BuildTiccmd(ticcmd_t *cmd)
    }
 
    // haleyjd 06/05/12: flight
-   if(gameactions[ka_flyup])
+   if(gameactions[ka_flyup][pnum])
       flyheight = FLIGHT_IMPULSE_AMT;
-   if(gameactions[ka_flydown])
+   if(gameactions[ka_flydown][pnum])
       flyheight = -FLIGHT_IMPULSE_AMT;
 
    // haleyjd 05/19/13: analog fly axis
    if(flyheight == 0)
-      flyheight = (int)(joyaxes[axis_fly] * FLIGHT_IMPULSE_AMT);
+      flyheight = (int)(joyaxes[axis_fly][pnum] * FLIGHT_IMPULSE_AMT);
 
-   if(gameactions[ka_flycenter])
+   if(gameactions[ka_flycenter][pnum])
    {
       flyheight = FLIGHT_CENTER;
       look = -32768;
    }
 
 
-   if(gameactions[ka_strafe])
+   if(gameactions[ka_strafe][pnum])
       side += (int)(tmousex * 2.0);
    else
       cmd->angleturn -= (int)(tmousex * 8.0);
@@ -675,8 +675,12 @@ void G_DoLoadLevel()
    Z_CheckHeap();
 
    // clear cmd building stuff
-   for(int i = 0; i < axis_max; i++)
-      joyaxes[i] = 0.0;
+   for(int pnum = 0; pnum < MAXPLAYERS; pnum++)
+   {
+       for(int i = 0; i < axis_max; i++)
+           joyaxes[i][pnum] = 0.0;
+   }
+
    mousex = mousey = 0.0;
    sendpause = sendsave = false;
    paused = 0;
@@ -714,6 +718,7 @@ void G_DoLoadLevel()
 bool G_Responder(event_t* ev)
 {
    int action;
+   int pnum = ev->inputnum;
 
    // killough 9/29/98: reformatted
    if(gamestate == GS_LEVEL && 
@@ -784,12 +789,12 @@ bool G_Responder(event_t* ev)
       else
       {
          action = G_KeyResponder(ev, kac_game); // haleyjd
-         gameactions[action] = true;
+         gameactions[action][pnum] = true;
       }
 
-      if(gameactions[ka_autorun])
+      if(gameactions[ka_autorun][pnum])
       {
-         gameactions[ka_autorun] = 0;
+         gameactions[ka_autorun][pnum] = 0;
          autorun = !autorun;
       }
 
@@ -797,7 +802,7 @@ bool G_Responder(event_t* ev)
       
    case ev_keyup:
       action = G_KeyResponder(ev, kac_game);   // haleyjd
-      gameactions[action] = false;
+      gameactions[action][pnum] = false;
       return false;   // always let key up events filter down
       
    case ev_mouse:
@@ -821,7 +826,7 @@ bool G_Responder(event_t* ev)
       return true;    // eat events
       
    case ev_joystick:
-      joyaxes[axisActions[ev->data1]] = ev->data2;
+      joyaxes[axisActions[ev->data1]][pnum] = ev->data2;
       return true;    // eat events
       
    default:
@@ -2690,6 +2695,7 @@ void G_ReloadDefaults()
    
    // killough 2/21/98:
    memset(playeringame+1, 0, sizeof(*playeringame)*(MAXPLAYERS-1));
+   playeringame[1] = true;
    
    consoleplayer = 0;
    

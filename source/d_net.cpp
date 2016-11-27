@@ -84,7 +84,7 @@ int        ticdup;
 static int maxsend;               // BACKUPTICS/(2*ticdup)-1
 
 void D_ProcessEvents(); 
-void G_BuildTiccmd(ticcmd_t *cmd); 
+void G_BuildTiccmd(ticcmd_t *cmd, int pnum); 
 void D_DoAdvanceDemo();
 
 static bool       reboundpacket;
@@ -327,7 +327,8 @@ void NetUpdate()
       if(maketic - gameticdiv >= BACKUPTICS / 2 - 1)
          break; // can't hold any more
       
-      G_BuildTiccmd(&localcmds[maketic%BACKUPTICS]);
+      G_BuildTiccmd(&localcmds[maketic%BACKUPTICS], 0);
+      G_BuildTiccmd(&netcmds[1][maketic%BACKUPTICS], 1);
       ++maketic;
    }
   
@@ -732,7 +733,7 @@ static bool RunGameTics()
    {
       I_StartTic();
       D_ProcessEvents();
-      G_BuildTiccmd(&netcmds[consoleplayer][maketic%BACKUPTICS]);
+      G_BuildTiccmd(&netcmds[consoleplayer][maketic%BACKUPTICS], 0);
       if(advancedemo)
          D_DoAdvanceDemo();
       G_Ticker();

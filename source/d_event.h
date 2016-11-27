@@ -48,6 +48,7 @@ struct event_t
   double    data2;     // mouse/joystick x move
   double    data3;     // mouse/joystick y move
   char      character; // actual character input when supported
+  unsigned char inputnum;    // Controller number that passed the input (anything not a joystick is treated as 0)
 };
  
 typedef enum

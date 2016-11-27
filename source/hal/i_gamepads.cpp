@@ -36,6 +36,8 @@
 #include "../Win32/i_xinput.h"
 #endif
 
+#define MAXJOY 4
+
 // Globals
 
 // current device number -- saved in config file
@@ -47,7 +49,7 @@ int i_joysticknum;
 static PODCollection<HALGamePad *> masterGamePadList;
 
 // Currently selected and active gamepad object, if any.
-static HALGamePad *activePad;
+static HALGamePad *activePad[MAXJOY];
 
 // Generic sensitivity values, for drivers that need them
 int i_joysticksens;
@@ -169,37 +171,45 @@ static halpaddriveritem_t halPadDriverTable[] =
 bool I_SelectDefaultGamePad()
 {
    HALGamePad *pad = NULL;
+   bool foundone = false;
 
    // Deselect any active device first.
-   if(activePad)
+   for(int joy = 0; joy < MAXJOY; joy++)
    {
-      activePad->deselect();
-      activePad = NULL;
+       if(activePad[joy])
+       {
+           activePad[joy]->deselect();
+           activePad[joy] = NULL;
+       }
+
+       if(i_joysticknum >= 0)
+       {
+           // search through the master directory for a pad with this number
+           PODCollection<HALGamePad *>::iterator itr = masterGamePadList.begin();
+
+           for(; itr != masterGamePadList.end(); itr++)
+           {
+               if((*itr)->num == joy)
+               {
+                   pad = *itr; // found it.
+                   break;
+               }
+           }
+       }
+
+       // Select the device if it was found.
+       if(pad)
+       {
+           if(pad->select())
+           {
+               activePad[joy] = pad;
+               foundone = true;
+           }
+       }
    }
 
-   if(i_joysticknum >= 0)
-   {
-      // search through the master directory for a pad with this number
-      PODCollection<HALGamePad *>::iterator itr = masterGamePadList.begin();
 
-      for(; itr != masterGamePadList.end(); itr++)
-      {
-         if((*itr)->num == i_joysticknum)
-         {
-            pad = *itr; // found it.
-            break;
-         }
-      }
-   }
-
-   // Select the device if it was found.
-   if(pad)
-   {      
-      if(pad->select())
-         activePad = pad;
-   }
-
-   return (activePad != NULL);
+   return foundone;
 }
 
 //
@@ -287,13 +297,30 @@ void I_ShutdownGamePads()
 //
 HALGamePad::padstate_t *I_PollActiveGamePad()
 {
-   if(activePad)
+   if(activePad[0])
    {
-      activePad->poll();
-      return &activePad->state;
+      activePad[0]->poll();
+      return &activePad[0]->state;
    }
    else
       return NULL;
+}
+
+//
+// I_PollActiveGamePad
+//
+// Get input from the indicated pad num, if any.
+// Returns NULL if there is no device active.
+//
+HALGamePad::padstate_t *I_PollGamePad(int pad)
+{
+    if(activePad[pad])
+    {
+        activePad[pad]->poll();
+        return &activePad[pad]->state;
+    }
+    else
+        return NULL;
 }
 
 //
@@ -317,7 +344,7 @@ HALGamePad *I_GetGamePad(size_t index)
 //
 HALGamePad *I_GetActivePad()
 {
-   return activePad;
+   return activePad[0];
 }
 
 // haleyjd 04/15/02: windows joystick commands
@@ -351,7 +378,7 @@ void I_StartHaptic(HALHapticInterface::effect_e effect, int data1, int data2)
 {
    HALHapticInterface *hhi;
    
-   if(i_forcefeedback && activePad && (hhi = activePad->getHapticInterface()))
+   if(i_forcefeedback && activePad && (hhi = activePad[0]->getHapticInterface()))
    {
       hhi->startEffect(effect, data1, data2);
       I_UpdateHaptics();
@@ -368,7 +395,7 @@ void I_PauseHaptics(bool effectsPaused)
 {
    HALHapticInterface *hhi;
 
-   if(activePad && (hhi = activePad->getHapticInterface()))
+   if(activePad[0] && (hhi = activePad[0]->getHapticInterface()))
       hhi->pauseEffects(effectsPaused);
 }
 
@@ -382,7 +409,7 @@ void I_UpdateHaptics()
 {
    HALHapticInterface *hhi;
 
-   if(i_forcefeedback && activePad && (hhi = activePad->getHapticInterface()))
+   if(i_forcefeedback && activePad && (hhi = activePad[0]->getHapticInterface()))
       hhi->updateEffects();
 }
 
@@ -399,7 +426,7 @@ void I_ClearHaptics()
 {
    HALHapticInterface *hhi;
 
-   if(activePad && (hhi = activePad->getHapticInterface()))
+   if(activePad && (hhi = activePad[0]->getHapticInterface()))
       hhi->clearEffects();
 }
 

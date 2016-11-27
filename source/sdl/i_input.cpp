@@ -279,51 +279,60 @@ static void I_JoystickEvents()
 {
    HALGamePad::padstate_t *padstate;
 
-   if(!(padstate = I_PollActiveGamePad()))
-      return;
-
-   // turn padstate into button input events
-   for(int button = 0; button < HALGamePad::MAXBUTTONS; button++)
+   for(int ply = 0; ply < MAXPLAYERS; ply++)
    {
-      edefstructvar(event_t, ev);
+       if(!(padstate = I_PollGamePad(ply)))
+           return;
 
-      if(padstate->buttons[button] != padstate->prevbuttons[button])
-      {
-         ev.type  = padstate->buttons[button] ? ev_keydown : ev_keyup;
-         ev.data1 = KEYD_JOY01 + button;
-         D_PostEvent(&ev);
-      }
+       // turn padstate into button input events
+       for(int button = 0; button < HALGamePad::MAXBUTTONS; button++)
+       {
+           edefstructvar(event_t, ev);
+
+           ev.inputnum = ply;
+
+           if(padstate->buttons[button] != padstate->prevbuttons[button])
+           {
+               ev.type = padstate->buttons[button] ? ev_keydown : ev_keyup;
+               ev.data1 = KEYD_JOY01 + button;
+               D_PostEvent(&ev);
+           }
+       }
+
+       // read axes
+       for(int axis = 0; axis < HALGamePad::MAXAXES; axis++)
+       {
+           // fire axis state change events
+           if(padstate->axes[axis] != padstate->prevaxes[axis])
+           {
+               edefstructvar(event_t, ev);
+
+               ev.inputnum = ply;
+
+               // if previous state was off, key down
+               if(padstate->prevaxes[axis] == 0.0)
+                   ev.type = ev_keydown;
+
+               // if new state is off, key up
+               if(padstate->axes[axis] == 0.0)
+                   ev.type = ev_keyup;
+
+               ev.data1 = KEYD_AXISON01 + axis;
+               D_PostEvent(&ev);
+           }
+
+           // post analog axis state
+           edefstructvar(event_t, ev);
+           ev.inputnum = ply;
+           ev.type = ev_joystick;
+           ev.data1 = axis;
+           ev.data2 = padstate->axes[axis];
+           if(axisOrientation[axis]) // may need to flip, if orientation == -1
+               ev.data2 *= axisOrientation[axis];
+           D_PostEvent(&ev);
+       }
    }
 
-   // read axes
-   for(int axis = 0; axis < HALGamePad::MAXAXES; axis++)
-   {
-      // fire axis state change events
-      if(padstate->axes[axis] != padstate->prevaxes[axis])
-      {
-         edefstructvar(event_t, ev);
-
-         // if previous state was off, key down
-         if(padstate->prevaxes[axis] == 0.0)
-            ev.type = ev_keydown;
-
-         // if new state is off, key up
-         if(padstate->axes[axis] == 0.0)
-            ev.type = ev_keyup;
-
-         ev.data1 = KEYD_AXISON01 + axis;
-         D_PostEvent(&ev);
-      }
-
-      // post analog axis state
-      edefstructvar(event_t, ev);
-      ev.type  = ev_joystick;
-      ev.data1 = axis;
-      ev.data2 = padstate->axes[axis];
-      if(axisOrientation[axis]) // may need to flip, if orientation == -1
-         ev.data2 *= axisOrientation[axis];
-      D_PostEvent(&ev);
-   }
 }
 
 
@@ -431,6 +440,7 @@ static void I_ReadMouse()
    {
       ev.type = ev_mouse;
       ev.data1 = SDL_MOUSEMOTION;
+      ev.inputnum = 0;
       if(mouseAccel_type == 2)
       {
          // SoM: So the values that go to Eternity should be 16.16 fixed
@@ -558,9 +568,9 @@ static void I_GetEvent()
    SDL_Event  ev;
    int        sendmouseevent = 0;
    int        buttons        = 0;
-   event_t    d_event        = { ev_keydown, 0, 0, 0, '\0' };
-   event_t    mouseevent     = { ev_mouse,   0, 0, 0, '\0' };
-   event_t    tempevent      = { ev_keydown, 0, 0, 0, '\0' }; 
+   event_t    d_event        = { ev_keydown, 0, 0, 0, '\0', 0 };
+   event_t    mouseevent     = { ev_mouse,   0, 0, 0, '\0', 0 };
+   event_t    tempevent      = { ev_keydown, 0, 0, 0, '\0', 0 }; 
 
    // [CG] 01/31/2012: Ensure we have the latest info about focus and mouse
    //                  grabbing.
