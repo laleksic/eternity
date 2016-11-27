@@ -378,7 +378,7 @@ void I_StartHaptic(HALHapticInterface::effect_e effect, int data1, int data2)
 {
    HALHapticInterface *hhi;
    
-   if(i_forcefeedback && activePad && (hhi = activePad[0]->getHapticInterface()))
+   if(i_forcefeedback && activePad[0] && (hhi = activePad[0]->getHapticInterface()))
    {
       hhi->startEffect(effect, data1, data2);
       I_UpdateHaptics();
@@ -409,7 +409,7 @@ void I_UpdateHaptics()
 {
    HALHapticInterface *hhi;
 
-   if(i_forcefeedback && activePad && (hhi = activePad[0]->getHapticInterface()))
+   if(i_forcefeedback && activePad[0] && (hhi = activePad[0]->getHapticInterface()))
       hhi->updateEffects();
 }
 
@@ -426,7 +426,7 @@ void I_ClearHaptics()
 {
    HALHapticInterface *hhi;
 
-   if(activePad && (hhi = activePad[0]->getHapticInterface()))
+   if(activePad[0] && (hhi = activePad[0]->getHapticInterface()))
       hhi->clearEffects();
 }
 
