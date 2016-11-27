@@ -72,6 +72,22 @@
 #define ST_FX                   143
 #define ST_FY                   168
 
+// haleyjd 06/27/08: made priorities into an enumeration
+enum
+{
+    ST_PRIORITY_NONE = 0,
+    ST_PRIORITY_GODMODE = 4,
+    ST_PRIORITY_RAMPAGE = 5,
+    ST_PRIORITY_PAIN_SELF = 6,
+    ST_PRIORITY_MUCHPAIN_SELF = 7,
+    ST_PRIORITY_PAIN = 7,
+    ST_PRIORITY_MUCHPAIN = 8,
+    ST_PRIORITY_EVILGRIN = 8,
+    ST_PRIORITY_FALLING = 9,
+    ST_PRIORITY_DEAD = 10,
+    ST_PRIORITY_MAX = 11,
+};
+
 // Should be set to patch width
 //  for tall numbers later on
 // haleyjd: unused
@@ -296,9 +312,6 @@ static st_binicon_t  w_armsbg;
 // weapon ownership widgets
 static st_multicon_t w_arms[6];
 
-// face status widget
-static st_multicon_t w_faces;
-
 // keycard widgets
 static st_multicon_t w_keyboxes[3];
 
@@ -311,20 +324,34 @@ static st_number_t   w_ammo[4];
 // max ammo widgets
 static st_number_t   w_maxammo[4];
 
- // number of frags so far in deathmatch
-static int      st_fragscount;
+struct st_console_t
+{
+    // face status widget
+    st_multicon_t w_faces;
 
-// used to use appopriately pained face
-static int      st_oldhealth = -1;
+    // number of frags so far in deathmatch
+    int      st_fragscount;
 
-// used for evil grin
-static int      oldweaponsowned[NUMWEAPONS];
+    // used to use appopriately pained face
+    int      st_oldhealth = -1;
 
- // count until face changes
-static int      st_facecount = 0;
+    // used for evil grin
+    int      oldweaponsowned[NUMWEAPONS];
 
-// current face index, used by w_faces
-static int      st_faceindex = 0;
+    // count until face changes
+    int      st_facecount = 0;
+
+    // current face index, used by w_faces
+    int      st_faceindex = 0;
+
+    int lastattackdown = -1;
+    int priority = ST_PRIORITY_NONE;
+
+    int lastcalc;
+    int oldhealth = -1;
+};
+
+static st_console_t  w_playerValues[MAXPLAYERS];
 
 // holds key-type for each key box on bar
 static int      keyboxes[3];
@@ -353,9 +380,9 @@ static void ST_refreshBackground()
       }
 
       // faces
-      STlib_initMultIcon(&w_faces,  ST_FACESX, ST_FACESY,
+      STlib_initMultIcon(&w_playerValues[displayplayer].w_faces,  ST_FACESX, ST_FACESY,
                          players[displayplayer].skin->faces, 
-                         &st_faceindex, &st_statusbaron);
+                         &w_playerValues[displayplayer].st_faceindex, &st_statusbaron);
    }
 }
 
@@ -395,35 +422,17 @@ bool ST_Responder(event_t *ev)
    return false;
 }
 
-static int ST_calcPainOffset()
+static int ST_calcPainOffset(st_console_t *hud, player_t *player)
 {
-   static int lastcalc;
-   static int oldhealth = -1;
-   int health = plyr->health > 100 ? 100 : plyr->health;
+   int health = player->health > 100 ? 100 : player->health;
    
-   if(health != oldhealth)
+   if(health != hud->oldhealth)
    {
-      lastcalc = ST_FACESTRIDE * (((100 - health) * ST_NUMPAINFACES) / 101);
-      oldhealth = health;
+      hud->lastcalc = ST_FACESTRIDE * (((100 - health) * ST_NUMPAINFACES) / 101);
+      hud->oldhealth = health;
    }
-   return lastcalc;
+   return hud->lastcalc;
 }
-
-// haleyjd 06/27/08: made priorities into an enumeration
-enum
-{
-   ST_PRIORITY_NONE          = 0,
-   ST_PRIORITY_GODMODE       = 4,
-   ST_PRIORITY_RAMPAGE       = 5,
-   ST_PRIORITY_PAIN_SELF     = 6,
-   ST_PRIORITY_MUCHPAIN_SELF = 7,
-   ST_PRIORITY_PAIN          = 7,
-   ST_PRIORITY_MUCHPAIN      = 8,
-   ST_PRIORITY_EVILGRIN      = 8,
-   ST_PRIORITY_FALLING       = 9,
-   ST_PRIORITY_DEAD          = 10,
-   ST_PRIORITY_MAX           = 11,
-};
 
 //
 // ST_updateFaceWidget
@@ -433,184 +442,182 @@ enum
 // the precedence of expressions is:
 //  dead > evil grin > turned head > straight ahead
 //
-static void ST_updateFaceWidget()
+static void ST_updateFaceWidget(st_console_t *hud, player_t *player)
 {
    int        i;
    angle_t    badguyangle;
    angle_t    diffang;
-   static int lastattackdown = -1;
-   static int priority = ST_PRIORITY_NONE;
    bool       doevilgrin;
    
-   if(priority < ST_PRIORITY_MAX)
+   if(hud->priority < ST_PRIORITY_MAX)
    {
       // dead
-      if(!plyr->health)
+      if(!player->health)
       {
-         priority = ST_PRIORITY_DEAD;
-         st_faceindex = ST_DEADFACE;
-         st_facecount = 1;
+         hud->priority = ST_PRIORITY_DEAD;
+         hud->st_faceindex = ST_DEADFACE;
+         hud->st_facecount = 1;
       }
    }
 
    // haleyjd 06/27/08: ouch face when player screams from falling
-   if(priority < ST_PRIORITY_DEAD)
+   if(hud->priority < ST_PRIORITY_DEAD)
    {
-      if(plyr->mo->intflags & MIF_SCREAMED)
+      if(player->mo->intflags & MIF_SCREAMED)
       {
-         priority = ST_PRIORITY_FALLING;
-         st_faceindex = ST_calcPainOffset() + ST_OUCHOFFSET;
-         st_facecount = 1;
+         hud->priority = ST_PRIORITY_FALLING;
+         hud->st_faceindex = ST_calcPainOffset(hud, player) + ST_OUCHOFFSET;
+         hud->st_facecount = 1;
       }
    }
 
-   if(priority < ST_PRIORITY_FALLING)
+   if(hud->priority < ST_PRIORITY_FALLING)
    {
-      if(plyr->bonuscount)
+      if(player->bonuscount)
       {
          // picking up bonus
          doevilgrin = false;
 
          for(i = 0; i < NUMWEAPONS; i++)
          {
-            if(oldweaponsowned[i] != plyr->weaponowned[i])
+            if(hud->oldweaponsowned[i] != player->weaponowned[i])
             {
                doevilgrin = true;
-               oldweaponsowned[i] = plyr->weaponowned[i];
+               hud->oldweaponsowned[i] = player->weaponowned[i];
             }
          }
          if(doevilgrin)
          {
             // evil grin if just picked up weapon
-            priority = ST_PRIORITY_EVILGRIN;
-            st_facecount = ST_EVILGRINCOUNT;
-            st_faceindex = ST_calcPainOffset() + ST_EVILGRINOFFSET;
+             hud->priority = ST_PRIORITY_EVILGRIN;
+            hud->st_facecount = ST_EVILGRINCOUNT;
+            hud->st_faceindex = ST_calcPainOffset(hud, player) + ST_EVILGRINOFFSET;
          }
       }
    }
 
-   if(priority < ST_PRIORITY_EVILGRIN)
+   if(hud->priority < ST_PRIORITY_EVILGRIN)
    {
-      if(plyr->damagecount && plyr->attacker && plyr->attacker != plyr->mo)
+      if(player->damagecount && player->attacker && player->attacker != player->mo)
       {
          // being attacked
-         priority = ST_PRIORITY_PAIN;
+          hud->priority = ST_PRIORITY_PAIN;
 
          // haleyjd 10/12/03: classic DOOM problem of missing OUCH face
          // was due to inversion of this test:
-         // if(plyr->health - st_oldhealth > ST_MUCHPAIN)
-         if(st_oldhealth - plyr->health > ST_MUCHPAIN)
+         // if(player->health - st_oldhealth > ST_MUCHPAIN)
+         if(hud->st_oldhealth - player->health > ST_MUCHPAIN)
          {
-            priority = ST_PRIORITY_MUCHPAIN;
-            st_facecount = ST_TURNCOUNT;
-            st_faceindex = ST_calcPainOffset() + ST_OUCHOFFSET;
+             hud->priority = ST_PRIORITY_MUCHPAIN;
+            hud->st_facecount = ST_TURNCOUNT;
+            hud->st_faceindex = ST_calcPainOffset(hud, player) + ST_OUCHOFFSET;
          }
          else
          {
-            badguyangle = R_PointToAngle2(plyr->mo->x,
-                                          plyr->mo->y,
-                                          plyr->attacker->x,
-                                          plyr->attacker->y);
+            badguyangle = R_PointToAngle2(player->mo->x,
+                                          player->mo->y,
+                                          player->attacker->x,
+                                          player->attacker->y);
 
-            if(badguyangle > plyr->mo->angle)
+            if(badguyangle > player->mo->angle)
             {
                // whether right or left
-               diffang = badguyangle - plyr->mo->angle;
+               diffang = badguyangle - player->mo->angle;
                i = diffang > ANG180;
             }
             else
             {
                // whether left or right
-               diffang = plyr->mo->angle - badguyangle;
+               diffang = player->mo->angle - badguyangle;
                i = diffang <= ANG180;
             } // confusing, aint it?
 
-            st_facecount = ST_TURNCOUNT;
-            st_faceindex = ST_calcPainOffset();
+            hud->st_facecount = ST_TURNCOUNT;
+            hud->st_faceindex = ST_calcPainOffset(hud, player);
 
             if(diffang < ANG45)
             {
                // head-on
-               st_faceindex += ST_RAMPAGEOFFSET;
+                hud->st_faceindex += ST_RAMPAGEOFFSET;
             }
             else if(i)
             {
                // turn face right
-               st_faceindex += ST_TURNOFFSET;
+                hud->st_faceindex += ST_TURNOFFSET;
             }
             else
             {
                // turn face left
-               st_faceindex += ST_TURNOFFSET+1;
+                hud->st_faceindex += ST_TURNOFFSET+1;
             }
          }
       }
    }
 
-   if(priority < ST_PRIORITY_PAIN)
+   if(hud->priority < ST_PRIORITY_PAIN)
    {
       // getting hurt because of your own damn stupidity
-      if(plyr->damagecount)
+      if(player->damagecount)
       {
          // haleyjd 10/12/03: classic DOOM problem of missing OUCH face
          // was due to inversion of this test:
-         // if(plyr->health - st_oldhealth > ST_MUCHPAIN)
-         if(st_oldhealth - plyr->health > ST_MUCHPAIN)
+         // if(player->health - st_oldhealth > ST_MUCHPAIN)
+         if(hud->st_oldhealth - player->health > ST_MUCHPAIN)
          {
-            priority = ST_PRIORITY_MUCHPAIN_SELF;
-            st_facecount = ST_TURNCOUNT;
-            st_faceindex = ST_calcPainOffset() + ST_OUCHOFFSET;
+             hud->priority = ST_PRIORITY_MUCHPAIN_SELF;
+            hud->st_facecount = ST_TURNCOUNT;
+            hud->st_faceindex = ST_calcPainOffset(hud, player) + ST_OUCHOFFSET;
          }
          else
          {
-            priority = ST_PRIORITY_PAIN_SELF;
-            st_facecount = ST_TURNCOUNT;
-            st_faceindex = ST_calcPainOffset() + ST_RAMPAGEOFFSET;
+             hud->priority = ST_PRIORITY_PAIN_SELF;
+            hud->st_facecount = ST_TURNCOUNT;
+            hud->st_faceindex = ST_calcPainOffset(hud, player) + ST_RAMPAGEOFFSET;
          }
       }
    }
 
-   if(priority < ST_PRIORITY_PAIN_SELF)
+   if(hud->priority < ST_PRIORITY_PAIN_SELF)
    {
       // rapid firing
-      if(plyr->attackdown)
+      if(player->attackdown)
       {
-         if(lastattackdown==-1)
-            lastattackdown = ST_RAMPAGEDELAY;
-         else if(!--lastattackdown)
+         if(hud->lastattackdown==-1)
+             hud->lastattackdown = ST_RAMPAGEDELAY;
+         else if(!--hud->lastattackdown)
          {
-            priority = ST_PRIORITY_RAMPAGE;
-            st_faceindex = ST_calcPainOffset() + ST_RAMPAGEOFFSET;
-            st_facecount = 1;
-            lastattackdown = 1;
+             hud->priority = ST_PRIORITY_RAMPAGE;
+            hud->st_faceindex = ST_calcPainOffset(hud, player) + ST_RAMPAGEOFFSET;
+            hud->st_facecount = 1;
+            hud->lastattackdown = 1;
          }
       }
       else
-         lastattackdown = -1;
+          hud->lastattackdown = -1;
    }
 
-   if(priority < ST_PRIORITY_RAMPAGE)
+   if(hud->priority < ST_PRIORITY_RAMPAGE)
    {
       // invulnerability
-      if((plyr->cheats & CF_GODMODE) || plyr->powers[pw_invulnerability])
+      if((player->cheats & CF_GODMODE) || player->powers[pw_invulnerability])
       {
-         priority = ST_PRIORITY_GODMODE;
+          hud->priority = ST_PRIORITY_GODMODE;
          
-         st_faceindex = ST_GODFACE;
-         st_facecount = 1;
+         hud->st_faceindex = ST_GODFACE;
+         hud->st_facecount = 1;
       }
    }
 
    // look left or look right if the facecount has timed out
-   if(!st_facecount)
+   if(!hud->st_facecount)
    {
       // sf: remove st_randomnumber
-      st_faceindex = ST_calcPainOffset() + (M_Random() % 3);
-      st_facecount = ST_STRAIGHTFACECOUNT;
-      priority = ST_PRIORITY_NONE;
+      hud->st_faceindex = ST_calcPainOffset(hud, player) + (M_Random() % 3);
+      hud->st_facecount = ST_STRAIGHTFACECOUNT;
+      hud->priority = ST_PRIORITY_NONE;
    }
    
-   st_facecount--;
+   hud->st_facecount--;
 }
 
 int sts_traditional_keys; // killough 2/28/98: traditional status bar keys
@@ -671,8 +678,8 @@ static void ST_updateWidgets()
    // used by w_frags widget
    st_fragson = st_statusbaron && GameType == gt_dm;
 
-   st_fragscount = plyr->totalfrags;     // sf 15/10/99 use totalfrags
-   w_frags.num   = st_fragscount;
+   w_playerValues[displayplayer].st_fragscount = plyr->totalfrags;     // sf 15/10/99 use totalfrags
+   w_frags.num   = w_playerValues[displayplayer].st_fragscount;
 }
 
 //
@@ -684,8 +691,14 @@ static void ST_DoomTicker()
 {
    st_clock++;
    // refresh everything if this is him coming back to life
-   ST_updateFaceWidget();
-   st_oldhealth = plyr->health;
+   for(int i = 0; i < MAXPLAYERS; i++)
+   {
+       if(playeringame[i])
+       {
+           ST_updateFaceWidget(&w_playerValues[i], &players[i]);
+           w_playerValues[i].st_oldhealth = players[i].health;
+       }
+   }
 }
 
 //
@@ -813,7 +826,7 @@ static void ST_drawWidgets()
    for(i = 0; i < 6; i++)
       STlib_updateMultIcon(&w_arms[i], FRACUNIT);
 
-   STlib_updateMultIcon(&w_faces, FRACUNIT);
+   STlib_updateMultIcon(&w_playerValues[displayplayer].w_faces, FRACUNIT);
 
    STlib_updateNum(&w_frags, NULL, FRACUNIT);
 }
@@ -1133,16 +1146,20 @@ static void ST_initData()
 
    st_statusbaron = true;
 
-   st_faceindex = 0;
    st_palette = -1;
-
-   st_oldhealth = -1;
-
-   for(i = 0; i < NUMWEAPONS; i++)
-      oldweaponsowned[i] = plyr->weaponowned[i];
 
    for(i = 0; i < 3; i++)
       keyboxes[i] = -1;
+
+   for(int pnum = 0; pnum < MAXPLAYERS; pnum++)
+   {
+       w_playerValues[pnum].st_faceindex = 0;
+
+       w_playerValues[pnum].st_oldhealth = -1;
+
+       for(i = 0; i < NUMWEAPONS; i++)
+           w_playerValues[pnum].oldweaponsowned[i] = players[pnum].weaponowned[i];
+   }
 
    STlib_init();
 }
@@ -1200,12 +1217,15 @@ static void ST_createWidgets()
                  ST_FRAGSWIDTH);
 
    // faces
-   STlib_initMultIcon(&w_faces,
-                      ST_FACESX,
-                      ST_FACESY,
-                      default_faces,
-                      &st_faceindex,
-                      &st_statusbaron);
+   for(i = 0; i < MAXPLAYERS; i++)
+   {
+       STlib_initMultIcon(&w_playerValues[i].w_faces,
+           ST_FACESX,
+           ST_FACESY,
+           default_faces,
+           &w_playerValues[i].st_faceindex,
+           &st_statusbaron);
+   }
 
    // armor percentage - should be colored later
    STlib_initPercent(&w_armor,
