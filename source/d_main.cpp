@@ -1359,7 +1359,7 @@ static void D_DoomInit()
    fastparm    = clfastparm    = !!M_CheckParm("-fast");
    // jff 1/24/98 end of set to both working and command line value
 
-   DefaultGameType = gt_coop;
+   DefaultGameType = gt_single;
 
    if(M_CheckParm("-deathmatch"))
    {

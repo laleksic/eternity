@@ -2695,7 +2695,6 @@ void G_ReloadDefaults()
    
    // killough 2/21/98:
    memset(playeringame+1, 0, sizeof(*playeringame)*(MAXPLAYERS-1));
-   playeringame[1] = true;
    
    consoleplayer = 0;
    

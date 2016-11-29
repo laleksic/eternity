@@ -309,9 +309,6 @@ static st_percent_t w_health;
 // arms background
 static st_binicon_t  w_armsbg;
 
-// weapon ownership widgets
-static st_multicon_t w_arms[6];
-
 // keycard widgets
 static st_multicon_t w_keyboxes[3];
 
@@ -328,6 +325,9 @@ struct st_console_t
 {
     // face status widget
     st_multicon_t w_faces;
+
+    // weapon ownership widgets
+    st_multicon_t w_arms[6];
 
     // number of frags so far in deathmatch
     int      st_fragscount;
@@ -824,7 +824,7 @@ static void ST_drawWidgets()
    STlib_updateBinIcon(&w_armsbg);
 
    for(i = 0; i < 6; i++)
-      STlib_updateMultIcon(&w_arms[i], FRACUNIT);
+     STlib_updateMultIcon(&w_playerValues[displayplayer].w_arms[i], FRACUNIT);
 
    STlib_updateMultIcon(&w_playerValues[displayplayer].w_faces, FRACUNIT);
 
@@ -1166,8 +1166,6 @@ static void ST_initData()
 
 static void ST_createWidgets()
 {
-   int i;
-
    // ready weapon ammo
    STlib_initNum(&w_ready,
                  ST_AMMOX,
@@ -1197,16 +1195,6 @@ static void ST_createWidgets()
                      &st_notdeathmatch,
                      &st_statusbaron);
 
-   // weapons owned
-   for(i = 0; i < 6; i++)
-   {
-      STlib_initMultIcon(&w_arms[i],
-                         ST_ARMSX+(i%3)*ST_ARMSXSPACE,
-                         ST_ARMSY+(i/3)*ST_ARMSYSPACE,
-                         arms[i], &plyr->weaponowned[i+1],
-                         &st_armson);
-   }
-
    // frags sum
    STlib_initNum(&w_frags,
                  ST_FRAGSX,
@@ -1216,15 +1204,25 @@ static void ST_createWidgets()
                  &st_fragson,
                  ST_FRAGSWIDTH);
 
-   // faces
-   for(i = 0; i < MAXPLAYERS; i++)
+   for(int pnum = 0; pnum < MAXPLAYERS; pnum++)
    {
-       STlib_initMultIcon(&w_playerValues[i].w_faces,
+       // faces
+       STlib_initMultIcon(&w_playerValues[pnum].w_faces,
            ST_FACESX,
            ST_FACESY,
            default_faces,
-           &w_playerValues[i].st_faceindex,
+           &w_playerValues[pnum].st_faceindex,
            &st_statusbaron);
+
+       // weapons owned
+       for(int i = 0; i < 6; i++)
+       {
+           STlib_initMultIcon(&w_playerValues[pnum].w_arms[i],
+               ST_ARMSX + (i % 3)*ST_ARMSXSPACE,
+               ST_ARMSY + (i / 3)*ST_ARMSYSPACE,
+               arms[i], &players[pnum].weaponowned[i + 1],
+               &st_armson);
+       }
    }
 
    // armor percentage - should be colored later
