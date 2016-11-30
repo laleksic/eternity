@@ -351,7 +351,7 @@ struct st_console_t
     int oldhealth = -1;
 };
 
-static st_console_t  w_playerValues[MAXPLAYERS];
+static st_console_t  w_playerValues[MAXLOCALPLAYERS];
 
 // holds key-type for each key box on bar
 static int      keyboxes[3];
@@ -691,7 +691,7 @@ static void ST_DoomTicker()
 {
    st_clock++;
    // refresh everything if this is him coming back to life
-   for(int i = 0; i < MAXPLAYERS; i++)
+   for(int i = 0; i < MAXLOCALPLAYERS; i++)
    {
        if(playeringame[i])
        {
@@ -1151,7 +1151,7 @@ static void ST_initData()
    for(i = 0; i < 3; i++)
       keyboxes[i] = -1;
 
-   for(int pnum = 0; pnum < MAXPLAYERS; pnum++)
+   for(int pnum = 0; pnum < MAXLOCALPLAYERS; pnum++)
    {
        w_playerValues[pnum].st_faceindex = 0;
 
@@ -1204,7 +1204,7 @@ static void ST_createWidgets()
                  &st_fragson,
                  ST_FRAGSWIDTH);
 
-   for(int pnum = 0; pnum < MAXPLAYERS; pnum++)
+   for(int pnum = 0; pnum < MAXLOCALPLAYERS; pnum++)
    {
        // faces
        STlib_initMultIcon(&w_playerValues[pnum].w_faces,

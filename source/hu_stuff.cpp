@@ -363,9 +363,9 @@ bool HU_Responder(event_t *ev)
 class HUDMessageWidget : public HUDWidget
 {
 protected:
-   char messages[MAXPLAYERS][MAXHUDMESSAGES][MAXHUDMSGLEN]; // messages
-   int  current_messages[MAXPLAYERS];                       // number of messages
-   int  scrolltime[MAXPLAYERS];                             // leveltime when message will scroll up
+   char messages[MAXLOCALPLAYERS][MAXHUDMESSAGES][MAXHUDMSGLEN]; // messages
+   int  current_messages[MAXLOCALPLAYERS];                       // number of messages
+   int  scrolltime[MAXLOCALPLAYERS];                             // leveltime when message will scroll up
 
 public:
    void addMessage(int pnum, const char *s);
@@ -396,7 +396,7 @@ void HUDMessageWidget::ticker()
    if(!hud_msg_scrollup)
       return;
 
-   for(int pnum = 0; pnum < MAXPLAYERS; pnum++)
+   for(int pnum = 0; pnum < MAXLOCALPLAYERS; pnum++)
    {
        // move up messages
        if(leveltime >= scrolltime[pnum])
@@ -461,7 +461,7 @@ void HUDMessageWidget::drawer()
 //
 void HUDMessageWidget::clear()
 {
-    for(int pnum = 0; pnum < MAXPLAYERS; pnum++)
+    for(int pnum = 0; pnum < MAXLOCALPLAYERS; pnum++)
        current_messages[displayplayer] = 0;
 }
 

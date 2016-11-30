@@ -32,11 +32,12 @@
 #include "../e_rtti.h"
 #include "../m_collection.h"
 #include "../m_qstr.h"
+#include "../doomdef.h"
 
 class HALGamePad;
 
 // Joystick device number, for config file
-extern int i_joysticknum;
+extern int i_joysticknum[MAXLOCALPLAYERS];
 
 // Generic sensitivity value, for drivers that need it
 extern int i_joysticksens;

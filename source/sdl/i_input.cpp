@@ -279,7 +279,7 @@ static void I_JoystickEvents()
 {
    HALGamePad::padstate_t *padstate;
 
-   for(int ply = 0; ply < MAXPLAYERS; ply++)
+   for(int ply = 0; ply < MAXLOCALPLAYERS; ply++)
    {
        if(!(padstate = I_PollGamePad(ply)))
            return;

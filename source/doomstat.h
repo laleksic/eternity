@@ -228,6 +228,7 @@ extern  int viewangleoffset;
 // Player taking events, and displaying.
 extern  int consoleplayer;
 extern  int displayplayer;
+extern  int localplayers;
 
 // -------------------------------------
 // Scores, rating.

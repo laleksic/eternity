@@ -463,7 +463,7 @@ static void V_InitScreenVBuffer()
 void V_InitSplitscreen()
 {
     int players = 1;
-    for(int i = 1; i < MAXPLAYERS; i++)
+    for(int i = 1; i < MAXLOCALPLAYERS; i++)
     {
         if(playeringame[i])
             players++;

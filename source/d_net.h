@@ -27,6 +27,7 @@
 #define D_NET_H__
 
 #include "d_ticcmd.h"
+#include "doomdef.h"
 
 //
 // Network play related stuff.
@@ -79,12 +80,13 @@ struct doomdata_t
     
     byte         starttic;
     byte         player;
+    byte         players;
     byte         numtics;
 
     union packetdata_u
     {
        byte      data[GAME_OPTION_SIZE];
-       ticcmd_t  cmds[BACKUPTICS];
+       ticcmd_t  cmds[MAXLOCALPLAYERS][BACKUPTICS];
     } d;
 };
 

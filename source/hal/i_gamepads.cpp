@@ -36,12 +36,10 @@
 #include "../Win32/i_xinput.h"
 #endif
 
-#define MAXJOY 4
-
 // Globals
 
 // current device number -- saved in config file
-int i_joysticknum;
+int i_joysticknum[MAXLOCALPLAYERS];
 
 // Module-private data
 
@@ -49,7 +47,7 @@ int i_joysticknum;
 static PODCollection<HALGamePad *> masterGamePadList;
 
 // Currently selected and active gamepad object, if any.
-static HALGamePad *activePad[MAXJOY];
+static HALGamePad *activePad[MAXLOCALPLAYERS];
 
 // Generic sensitivity values, for drivers that need them
 int i_joysticksens;
@@ -174,7 +172,7 @@ bool I_SelectDefaultGamePad()
    bool foundone = false;
 
    // Deselect any active device first.
-   for(int joy = 0; joy < MAXJOY; joy++)
+   for(int joy = 0; joy < MAXLOCALPLAYERS; joy++)
    {
        if(activePad[joy])
        {
@@ -182,7 +180,7 @@ bool I_SelectDefaultGamePad()
            activePad[joy] = NULL;
        }
 
-       if(i_joysticknum >= 0)
+       if(i_joysticknum[MAXLOCALPLAYERS] >= 0)
        {
            // search through the master directory for a pad with this number
            PODCollection<HALGamePad *>::iterator itr = masterGamePadList.begin();
@@ -350,10 +348,15 @@ HALGamePad *I_GetActivePad()
 // haleyjd 04/15/02: windows joystick commands
 CONSOLE_COMMAND(i_joystick, 0)
 {
-   if(Console.argc != 1)
+   if(Console.argc != 2)
       return;
 
-   i_joysticknum = Console.argv[0]->toInt();
+   int slotnum = Console.argv[0]->toInt();
+
+   if(slotnum < 0 || slotnum >= MAXLOCALPLAYERS)
+      return;
+
+   i_joysticknum[slotnum] = Console.argv[1]->toInt();
    I_SelectDefaultGamePad();
 }
 

@@ -68,7 +68,7 @@ doomdata_t *netbuffer; // points inside doomcom
 #define RESENDCOUNT 10
 #define PL_DRONE    0x80    /* bit flag in doomdata->player */
 
-static ticcmd_t localcmds[BACKUPTICS];
+static ticcmd_t localcmds[MAXLOCALPLAYERS][BACKUPTICS];
 
 ticcmd_t    netcmds[MAXPLAYERS][BACKUPTICS];
 static int  nettics[MAXNETNODES];
@@ -264,16 +264,19 @@ static void GetPackets()
       int start;
          
       remoteresend[netnode] = false;
-         
-      start = nettics[netnode] - realstart;               
-      src = &netbuffer->d.cmds[start];
-         
-      while(nettics[netnode] < realend)
+      
+      for(int pnum = 0; pnum < netbuffer->players; pnum++)
       {
-         dest = &netcmds[netconsole][nettics[netnode]%BACKUPTICS];
-         nettics[netnode]++;
-         *dest = *src;
-         src++;
+          start = nettics[netnode] - realstart;
+          src = &netbuffer->d.cmds[pnum][start];
+
+          while(nettics[netnode] < realend)
+          {
+              dest = &netcmds[netconsole][nettics[netnode] % BACKUPTICS];
+              nettics[netnode]++;
+              *dest = *src;
+              src++;
+          }
       }
    }
 }
@@ -316,6 +319,7 @@ void NetUpdate()
    }
    
    netbuffer->player = consoleplayer;
+   netbuffer->players = localplayers;
    
    // build new ticcmds for console player
    gameticdiv = gametic / ticdup;
@@ -327,8 +331,9 @@ void NetUpdate()
       if(maketic - gameticdiv >= BACKUPTICS / 2 - 1)
          break; // can't hold any more
       
-      G_BuildTiccmd(&localcmds[maketic%BACKUPTICS], 0);
-      G_BuildTiccmd(&netcmds[1][maketic%BACKUPTICS], 1);
+      for(int pnum = 0; pnum < netbuffer->players; pnum++)
+         G_BuildTiccmd(&localcmds[pnum][maketic%BACKUPTICS], pnum);
+
       ++maketic;
    }
   
@@ -347,8 +352,11 @@ void NetUpdate()
          
          resendto[i] = maketic - doomcom->extratics;
          
-         for(int j = 0; j < netbuffer->numtics; j++)
-            netbuffer->d.cmds[j] = localcmds[(realstart + j) % BACKUPTICS];
+         for(int pnum = 0; pnum < netbuffer->players; pnum++)
+         {
+             for(int j = 0; j < netbuffer->numtics; j++)
+                 netbuffer->d.cmds[pnum][j] = localcmds[pnum][(realstart + j) % BACKUPTICS];
+         }
          
          if(remoteresend[i])
          {
@@ -886,6 +894,9 @@ CONSOLE_VARIABLE(d_fastrefresh, d_fastrefresh, 0) {}
 
 VARIABLE_TOGGLE(d_interpolate, NULL, onoff);
 CONSOLE_VARIABLE(d_interpolate, d_interpolate, 0) {}
+
+VARIABLE_INT(localplayers, NULL, 1, 4, NULL);
+CONSOLE_VARIABLE(localplayers, localplayers, 0) {}
 
 //----------------------------------------------------------------------------
 //

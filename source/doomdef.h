@@ -68,6 +68,9 @@ typedef enum {
 
 // The maximum number of players, multiplayer/networking.
 #define MAXPLAYERS       4
+// The maximum number of local players for splitscreen.
+#define MAXLOCALPLAYERS  4
+static_assert(MAXLOCALPLAYERS <= MAXPLAYERS, "MAXLOCALPLAYERS cannot be bigger than MAXPLAYERS");
 
 // phares 5/14/98:
 // DOOM Editor Numbers (aka doomednum in Mobj)

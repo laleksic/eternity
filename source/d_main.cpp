@@ -592,7 +592,7 @@ void D_Display()
 
    int oldDisplayPlayer = displayplayer;
 
-   for(int i = 0; i < MAXPLAYERS; i++)
+   for(int i = 0; i < MAXLOCALPLAYERS; i++)
    {
        displayplayer = i;
 

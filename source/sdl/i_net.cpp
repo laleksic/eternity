@@ -246,17 +246,17 @@ bool PacketSend(void)
          // reserve 2 bytes for the flags
          rover += 2;
 
-         NETWRITEBYTEIF(netbuffer->d.cmds[c].forwardmove, TCF_FORWARDMOVE);
-         NETWRITEBYTEIF(netbuffer->d.cmds[c].sidemove,    TCF_SIDEMOVE);
-         NETWRITESHORTIF(netbuffer->d.cmds[c].angleturn,  TCF_ANGLETURN);         
+         NETWRITEBYTEIF(netbuffer->d.cmds[0][c].forwardmove, TCF_FORWARDMOVE);
+         NETWRITEBYTEIF(netbuffer->d.cmds[0][c].sidemove,    TCF_SIDEMOVE);
+         NETWRITESHORTIF(netbuffer->d.cmds[0][c].angleturn,  TCF_ANGLETURN);
          
-         NETWRITESHORT(netbuffer->d.cmds[c].consistency);         
+         NETWRITESHORT(netbuffer->d.cmds[0][c].consistency);
 
-         NETWRITEBYTEIF(netbuffer->d.cmds[c].chatchar, TCF_CHATCHAR);
-         NETWRITEBYTEIF(netbuffer->d.cmds[c].buttons,  TCF_BUTTONS);
-         NETWRITEBYTEIF(netbuffer->d.cmds[c].actions,  TCF_ACTIONS);
-         NETWRITESHORTIF(netbuffer->d.cmds[c].look,    TCF_LOOK);
-         NETWRITEBYTEIF(netbuffer->d.cmds[c].fly,      TCF_FLY);
+         NETWRITEBYTEIF(netbuffer->d.cmds[0][c].chatchar, TCF_CHATCHAR);
+         NETWRITEBYTEIF(netbuffer->d.cmds[0][c].buttons,  TCF_BUTTONS);
+         NETWRITEBYTEIF(netbuffer->d.cmds[0][c].actions,  TCF_ACTIONS);
+         NETWRITESHORTIF(netbuffer->d.cmds[0][c].look,    TCF_LOOK);
+         NETWRITEBYTEIF(netbuffer->d.cmds[0][c].fly,      TCF_FLY);
 
          // go back to ticstart and write in the flags
          ticend = rover;
@@ -362,31 +362,31 @@ bool PacketGet(void)
          memset(&(netbuffer->d.cmds[c]), 0, sizeof(ticcmd_t));
 
          if(ticcmdflags & TCF_FORWARDMOVE)
-            netbuffer->d.cmds[c].forwardmove = *rover++;
+            netbuffer->d.cmds[0][c].forwardmove = *rover++;
          if(ticcmdflags & TCF_SIDEMOVE)
-            netbuffer->d.cmds[c].sidemove = *rover++;
+            netbuffer->d.cmds[0][c].sidemove = *rover++;
          if(ticcmdflags & TCF_ANGLETURN)
          {
-            netbuffer->d.cmds[c].angleturn = NetToHost16(rover);
+            netbuffer->d.cmds[0][c].angleturn = NetToHost16(rover);
             rover += 2;
          }
          
-         netbuffer->d.cmds[c].consistency = NetToHost16(rover);
+         netbuffer->d.cmds[0][c].consistency = NetToHost16(rover);
          rover += 2;
          
          if(ticcmdflags & TCF_CHATCHAR)
-            netbuffer->d.cmds[c].chatchar = *rover++;
+            netbuffer->d.cmds[0][c].chatchar = *rover++;
          if(ticcmdflags & TCF_BUTTONS)
-            netbuffer->d.cmds[c].buttons = *rover++;
+            netbuffer->d.cmds[0][c].buttons = *rover++;
          if(ticcmdflags & TCF_ACTIONS)
-            netbuffer->d.cmds[c].actions = *rover++;
+            netbuffer->d.cmds[0][c].actions = *rover++;
          if(ticcmdflags & TCF_LOOK)
          {
-            netbuffer->d.cmds[c].look = NetToHost16(rover);
+            netbuffer->d.cmds[0][c].look = NetToHost16(rover);
             rover += 2;
          }
          if(ticcmdflags & TCF_FLY)
-            netbuffer->d.cmds[c].fly = *rover++;
+            netbuffer->d.cmds[0][c].fly = *rover++;
       }
    }
    else

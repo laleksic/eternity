@@ -458,8 +458,8 @@ void S_StartSfxInfo(const soundparams_t &params)
    bool priority_boost = false;
    bool extcamera      = false;
    bool nocutoff       = false;
-   camera_t playercam[MAXPLAYERS];
-   sector_t *earsec[MAXPLAYERS];
+   camera_t playercam[MAXLOCALPLAYERS];
+   sector_t *earsec[MAXLOCALPLAYERS];
    camera_t     *listener = NULL;
    sfxinfo_t    *sfx      = params.sfx;
    PointThinker *origin   = params.origin;
@@ -557,7 +557,7 @@ void S_StartSfxInfo(const soundparams_t &params)
    // haleyjd: setup playercam
    if(gamestate == GS_LEVEL)
    {     
-       for(int i = 0; i < MAXPLAYERS; i++)
+       for(int i = 0; i < MAXLOCALPLAYERS; i++)
        {
            if(playeringame[i] && players[i].mo)
            {
@@ -624,7 +624,7 @@ void S_StartSfxInfo(const soundparams_t &params)
    else
    {     
        fixed_t keyDist = INT_MAX;
-       for(int i = 0; i < MAXPLAYERS; i++)
+       for(int i = 0; i < MAXLOCALPLAYERS; i++)
        {
            if(playeringame[i])
            {
@@ -937,14 +937,14 @@ static void S_updateEnvironment(sector_t *earsec)
 void S_UpdateSounds(const Mobj *listener)
 {
    // sf: a camera_t holding the information about the player
-   camera_t playercam[MAXPLAYERS]; 
-   sector_t *earsec[MAXPLAYERS];
+   camera_t playercam[MAXLOCALPLAYERS];
+   sector_t *earsec[MAXLOCALPLAYERS];
 
    //jff 1/22/98 return if sound is not enabled
    if(!snd_card || nosfxparm)
       return;
 
-   for(int i = 0; i < MAXPLAYERS; i++)
+   for(int i = 0; i < MAXLOCALPLAYERS; i++)
    {
        if(playeringame[i] && players[i].mo)
        {
@@ -1027,7 +1027,7 @@ void S_UpdateSounds(const Mobj *listener)
          {
              fixed_t keyDist = INT_MAX;
              camera_t *keyCam = NULL;
-             for(int i = 0; i < MAXPLAYERS; i++)
+             for(int i = 0; i < MAXLOCALPLAYERS; i++)
              {
                  if(playeringame[i])
                  {
