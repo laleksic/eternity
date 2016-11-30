@@ -187,7 +187,7 @@ bool I_SelectDefaultGamePad()
 
            for(; itr != masterGamePadList.end(); itr++)
            {
-               if((*itr)->num == joy)
+               if((*itr)->num == i_joysticknum[MAXLOCALPLAYERS])
                {
                    pad = *itr; // found it.
                    break;
