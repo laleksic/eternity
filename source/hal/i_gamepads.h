@@ -157,7 +157,7 @@ HALGamePad::padstate_t *I_PollGamePad(int pad);
 
 size_t I_GetNumGamePads();
 HALGamePad *I_GetGamePad(size_t index);
-HALGamePad *I_GetActivePad();
+HALGamePad *I_GetActivePad(int pnum);
 
 // Haptics
 

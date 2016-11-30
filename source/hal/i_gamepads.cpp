@@ -168,26 +168,26 @@ static halpaddriveritem_t halPadDriverTable[] =
 //
 bool I_SelectDefaultGamePad()
 {
-   HALGamePad *pad = NULL;
    bool foundone = false;
 
    // Deselect any active device first.
    for(int joy = 0; joy < MAXLOCALPLAYERS; joy++)
    {
+       HALGamePad *pad = NULL;
        if(activePad[joy])
        {
            activePad[joy]->deselect();
            activePad[joy] = NULL;
        }
 
-       if(i_joysticknum[MAXLOCALPLAYERS] >= 0)
+       if(i_joysticknum[joy] >= 0)
        {
            // search through the master directory for a pad with this number
            PODCollection<HALGamePad *>::iterator itr = masterGamePadList.begin();
 
            for(; itr != masterGamePadList.end(); itr++)
            {
-               if((*itr)->num == i_joysticknum[MAXLOCALPLAYERS])
+               if((*itr)->num == i_joysticknum[joy])
                {
                    pad = *itr; // found it.
                    break;
@@ -340,9 +340,9 @@ HALGamePad *I_GetGamePad(size_t index)
 //
 // I_GetActivePad
 //
-HALGamePad *I_GetActivePad()
+HALGamePad *I_GetActivePad(int pnum)
 {
-   return activePad[0];
+   return activePad[pnum];
 }
 
 // haleyjd 04/15/02: windows joystick commands

@@ -282,7 +282,7 @@ static void I_JoystickEvents()
    for(int ply = 0; ply < MAXLOCALPLAYERS; ply++)
    {
        if(!(padstate = I_PollGamePad(ply)))
-           return;
+           continue;
 
        // turn padstate into button input events
        for(int button = 0; button < HALGamePad::MAXBUTTONS; button++)

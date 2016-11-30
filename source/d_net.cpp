@@ -265,18 +265,17 @@ static void GetPackets()
          
       remoteresend[netnode] = false;
       
-      for(int pnum = 0; pnum < netbuffer->players; pnum++)
-      {
-          start = nettics[netnode] - realstart;
-          src = &netbuffer->d.cmds[pnum][start];
+      start = nettics[netnode] - realstart;
+      //src = &netbuffer->d.cmds[pnum][start];
 
-          while(nettics[netnode] < realend)
-          {
-              dest = &netcmds[netconsole][nettics[netnode] % BACKUPTICS];
-              nettics[netnode]++;
-              *dest = *src;
-              src++;
-          }
+      while(nettics[netnode] < realend)
+      {
+         for(int pnum = netconsole; pnum < netbuffer->players; pnum++)
+         {
+             netcmds[pnum][nettics[netnode] % BACKUPTICS] = netbuffer->d.cmds[pnum][start];
+         }
+         nettics[netnode]++;
+         start++;
       }
    }
 }

@@ -2418,7 +2418,7 @@ menu_t menu_mouse_accel_and_mlook =
 //
 
 static const char **mn_js_desc;
-static const char **mn_js_cmds;
+static const char **mn_js_cmds[MAXLOCALPLAYERS];
 
 static void MN_BuildJSTables()
 {
@@ -2432,11 +2432,16 @@ static void MN_BuildJSTables()
 
       // allocate arrays
       mn_js_desc = ecalloc(const char **, (numpads + 2), sizeof(char *));
-      mn_js_cmds = ecalloc(const char **, (numpads + 2), sizeof(char *));
 
       // first item is "none", for disabling gamepad input altogether
       mn_js_desc[0] = "none";
-      mn_js_cmds[0] = "i_joystick -1";
+
+      for(int i = 0; i < MAXLOCALPLAYERS; i++)
+      {
+          mn_js_cmds[i] = ecalloc(const char **, (numpads + 2), sizeof(char *));
+          tempstr.Printf(0, "i_joystick %i -1", i);
+          mn_js_cmds[i][0] = tempstr.duplicate(PU_STATIC);
+      }
 
       // add every active gamepad
       for(size_t jsnum = 0; jsnum < numpads; jsnum++)
@@ -2445,13 +2450,17 @@ static void MN_BuildJSTables()
 
          mn_js_desc[jsnum + 1] = pad->name.duplicate(PU_STATIC);         
          
-         tempstr.Printf(0, "i_joystick %i", pad->num);
-         mn_js_cmds[jsnum + 1] = tempstr.duplicate(PU_STATIC);
+         for(int i = 0; i < MAXLOCALPLAYERS; i++)
+         {
+             tempstr.Printf(0, "i_joystick %i %i", i, pad->num);
+             mn_js_cmds[i][jsnum + 1] = tempstr.duplicate(PU_STATIC);
+         }
       }
 
       // add a null terminator to the end of the list
       mn_js_desc[numpads + 1] = NULL;
-      mn_js_cmds[numpads + 1] = NULL;
+      for(int i = 0; i < MAXLOCALPLAYERS; i++)
+          mn_js_cmds[i][numpads + 1] = NULL;
 
       menu_built = true;
    }
@@ -2462,18 +2471,25 @@ CONSOLE_COMMAND(mn_joysticks, cf_hidden)
    static char title[256];
    const char *drv_name;
    HALGamePad *pad;
+   if(Console.argc != 1)
+       return;
+
+   int pnum = Console.argv[0]->toInt();
+   if(pnum < 0 || pnum >= MAXLOCALPLAYERS)
+       return;
+
    MN_BuildJSTables();
 
-   if((pad = I_GetActivePad()))
+   if((pad = I_GetActivePad(pnum)))
       drv_name = pad->name.constPtr();
    else
       drv_name = "none";
 
    psnprintf(title, sizeof(title),
-             "Choose a Gamepad\n\nCurrent device:\n  %s",
-             drv_name);
+             "Choose a Gamepad for player %d\n\nCurrent device:\n  %s",
+             pnum + 1, drv_name);
 
-   MN_SetupBoxWidget(title, mn_js_desc, 1, NULL, mn_js_cmds);
+   MN_SetupBoxWidget(title, mn_js_desc, 1, NULL, mn_js_cmds[pnum]);
    MN_ShowBoxWidget();
 }
 
@@ -2549,7 +2565,10 @@ static menuitem_t mn_joystick_items[] =
    { it_title,        "Gamepad Settings",          NULL,   NULL      },
    { it_gap                                                          },
    { it_info,         "Devices"                                      },
-   { it_runcmd,       "Select gamepad...",         "mn_joysticks"    },
+   { it_runcmd,       "Select gamepad (player 1)", "mn_joysticks 0"  },
+   { it_runcmd,       "Select gamepad (player 2)", "mn_joysticks 1"  },
+   { it_runcmd,       "Select gamepad (player 3)", "mn_joysticks 2"  },
+   { it_runcmd,       "Select gamepad (player 4)", "mn_joysticks 3"  },
    { it_runcmd,       "Test gamepad...",           "mn_padtest"      },
    { it_gap                                                          },
    { it_info,         "Settings"                                     },
@@ -2678,7 +2697,7 @@ static void MN_padTestDrawer()
 //
 static void MN_padTestTicker()
 {
-   HALGamePad *gamepad = I_GetActivePad();
+   HALGamePad *gamepad = I_GetActivePad(0);
    if(!gamepad)
    {
       mn_padtestdata.numAxes = 0;
@@ -2725,7 +2744,7 @@ static menuwidget_t padtest_widget =
 
 CONSOLE_COMMAND(mn_padtest, 0)
 {
-   if(!I_GetActivePad())
+   if(!I_GetActivePad(0))
    {
       MN_ErrorMsg("No active gamepad");
       return;
