@@ -92,8 +92,9 @@ void QuakeThinker::Think()
          if(dst < this->quakeRadius && p->quake < this->intensity)
          {
             p->quake = this->intensity;
-            if(p == &players[consoleplayer])
-               I_StartHaptic(HALHapticInterface::EFFECT_RUMBLE, this->intensity, 1000/TICRATE);
+            int pnum = p - players;
+            //if(p == &players[consoleplayer])
+               I_StartHaptic(HALHapticInterface::EFFECT_RUMBLE, this->intensity, 1000/TICRATE, pnum);
          }
 
          // every 2 tics, the player may be damaged

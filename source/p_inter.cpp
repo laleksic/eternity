@@ -1693,8 +1693,9 @@ void P_DamageMobj(Mobj *target, Mobj *inflictor, Mobj *source,
          player->damagecount = 0;
 
       // haleyjd 06/08/13: reimplement support for tactile damage feedback :)
-      if(player == &players[consoleplayer])
-         I_StartHaptic(HALHapticInterface::EFFECT_DAMAGE, player->damagecount, 300);      
+      int pnum = player - players;
+      //if(player == &players[consoleplayer])
+         I_StartHaptic(HALHapticInterface::EFFECT_DAMAGE, player->damagecount, 300, pnum);      
    }
 
    // do the damage

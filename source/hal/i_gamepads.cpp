@@ -377,11 +377,11 @@ bool i_forcefeedback;
 // Start a haptic effect with an argument which may affect the strength or
 // duration of the effect, depending on the type of effect being ordered.
 //
-void I_StartHaptic(HALHapticInterface::effect_e effect, int data1, int data2)
+void I_StartHaptic(HALHapticInterface::effect_e effect, int data1, int data2, int pad)
 {
    HALHapticInterface *hhi;
    
-   if(i_forcefeedback && activePad[0] && (hhi = activePad[0]->getHapticInterface()))
+   if(i_forcefeedback && activePad[pad] && (hhi = activePad[pad]->getHapticInterface()))
    {
       hhi->startEffect(effect, data1, data2);
       I_UpdateHaptics();
@@ -398,8 +398,11 @@ void I_PauseHaptics(bool effectsPaused)
 {
    HALHapticInterface *hhi;
 
-   if(activePad[0] && (hhi = activePad[0]->getHapticInterface()))
-      hhi->pauseEffects(effectsPaused);
+   for(int i = 0; i < MAXLOCALPLAYERS; i++)
+   {
+       if(activePad[i] && (hhi = activePad[i]->getHapticInterface()))
+           hhi->pauseEffects(effectsPaused);
+   }
 }
 
 //
@@ -412,8 +415,11 @@ void I_UpdateHaptics()
 {
    HALHapticInterface *hhi;
 
-   if(i_forcefeedback && activePad[0] && (hhi = activePad[0]->getHapticInterface()))
-      hhi->updateEffects();
+   for(int i = 0; i < MAXLOCALPLAYERS; i++)
+   {
+       if(i_forcefeedback && activePad[i] && (hhi = activePad[i]->getHapticInterface()))
+           hhi->updateEffects();
+   }
 }
 
 //
@@ -429,8 +435,11 @@ void I_ClearHaptics()
 {
    HALHapticInterface *hhi;
 
-   if(activePad[0] && (hhi = activePad[0]->getHapticInterface()))
-      hhi->clearEffects();
+   for(int i = 0; i < MAXLOCALPLAYERS; i++)
+   {
+       if(activePad[i] && (hhi = activePad[i]->getHapticInterface()))
+           hhi->clearEffects();
+   }
 }
 
 VARIABLE_TOGGLE(i_forcefeedback, NULL, onoff);

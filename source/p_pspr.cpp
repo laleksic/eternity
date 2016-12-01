@@ -573,8 +573,9 @@ void A_WeaponReady(actionargs_t *actionargs)
       psp->state == states[E_SafeState(S_SAW)])
    {
       S_StartSound(player->mo, sfx_sawidl);
-      if(player == &players[consoleplayer])
-         I_StartHaptic(HALHapticInterface::EFFECT_CONSTANT, 3, 108);
+      int pnum = mo->player - players;
+      //if(mo->player == &players[consoleplayer])
+         I_StartHaptic(HALHapticInterface::EFFECT_CONSTANT, 3, 108, pnum);
    }
 
    // check for change
@@ -763,8 +764,9 @@ void P_WeaponRecoil(player_t *player)
    }
 
    // haleyjd 06/05/13: if weapon is flagged for it, do haptic recoil effect here.
-   if(player == &players[consoleplayer] && (readyweapon->flags & WPF_HAPTICRECOIL))
-      I_StartHaptic(HALHapticInterface::EFFECT_FIRE, readyweapon->hapticrecoil, readyweapon->haptictime);
+   int pnum = player - players;
+   if(/*player == &players[consoleplayer] && */(readyweapon->flags & WPF_HAPTICRECOIL))
+      I_StartHaptic(HALHapticInterface::EFFECT_FIRE, readyweapon->hapticrecoil, readyweapon->haptictime, pnum);
 }
 
 // Weapons now recoil, amount depending on the weapon.              // phares
@@ -886,7 +888,8 @@ void A_Saw(actionargs_t *actionargs)
    slope = P_doAutoAim(mo, angle, MELEERANGE + 1);
    P_LineAttack(mo, angle, MELEERANGE+1, slope, damage);
    
-   I_StartHaptic(HALHapticInterface::EFFECT_CONSTANT, 4, 108);   
+   int pnum = mo->player - players;
+   I_StartHaptic(HALHapticInterface::EFFECT_CONSTANT, 4, 108, pnum);
    
    if(!clip.linetarget)
    {
@@ -895,7 +898,7 @@ void A_Saw(actionargs_t *actionargs)
    }
 
    P_WeaponSound(mo, sfx_sawhit);
-   I_StartHaptic(HALHapticInterface::EFFECT_RUMBLE, 5, 108);
+   I_StartHaptic(HALHapticInterface::EFFECT_RUMBLE, 5, 108, pnum);
    
    // turn to face target
    angle = P_PointToAngle(mo->x, mo->y, clip.linetarget->x, clip.linetarget->y);
@@ -1529,8 +1532,9 @@ void A_BFGsound(actionargs_t *actionargs)
 
    P_WeaponSound(mo, sfx_bfg);
 
-   if(mo->player == &players[consoleplayer])
-      I_StartHaptic(HALHapticInterface::EFFECT_RAMPUP, 5, 850);
+   int pnum = mo->player - players;
+   //if(mo->player == &players[consoleplayer])
+      I_StartHaptic(HALHapticInterface::EFFECT_RAMPUP, 5, 850, pnum);
 }
 
 //

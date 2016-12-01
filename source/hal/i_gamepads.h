@@ -167,7 +167,7 @@ extern bool i_forcefeedback;
 
 // Start a haptic effect with an argument which may affect the strength or
 // duration of the effect, depending on the type of effect being ordered.
-void I_StartHaptic(HALHapticInterface::effect_e effect, int data1, int data2);
+void I_StartHaptic(HALHapticInterface::effect_e effect, int data1, int data2, int pad);
 
 // Pause all running haptic effects
 void I_PauseHaptics(bool effectsPaused);
