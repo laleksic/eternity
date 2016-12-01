@@ -181,7 +181,7 @@ int mouseb_dblc2;  // causes a use action, however
 #define SLOWTURNTICS   6
 #define QUICKREVERSE   32768 // 180 degree reverse                    // phares
 
-int  turnheld;       // for accelerative turning
+int  turnheld[MAXLOCALPLAYERS];       // for accelerative turning
 
 bool mousearray[4];
 bool *mousebuttons = &mousearray[1];    // allow [-1]
@@ -261,11 +261,11 @@ void G_BuildTiccmd(ticcmd_t *cmd, int pnum)
 
    // use two stage accelerative turning on the keyboard and joystick
    if(gameactions[pnum][ka_right] || gameactions[pnum][ka_left])
-      turnheld += ticdup;
+      turnheld[pnum] += ticdup;
    else
-      turnheld = 0;
+      turnheld[pnum] = 0;
 
-   if(turnheld < SLOWTURNTICS)
+   if(turnheld[pnum] < SLOWTURNTICS)
       tspeed = 2;             // slow turn
    else
       tspeed = speed;
