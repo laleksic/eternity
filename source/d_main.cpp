@@ -596,6 +596,11 @@ void D_Display()
       I_SetMode();
    }
 
+   if(staticPlayers > 1)
+   {
+       I_CheckSplitscreen();
+   }
+
    // save the current screen if about to wipe
    // no melting consoles
 

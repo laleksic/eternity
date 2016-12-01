@@ -47,6 +47,7 @@ public:
    virtual void ShutdownGraphicsPartway() = 0;
    virtual bool InitGraphicsMode()        = 0;
    virtual void CopyScreen(int) {};
+   virtual void CheckSplitscreen()        = 0;
 };
 
 
@@ -61,6 +62,8 @@ void I_ShutdownGraphics();
 void I_SetPalette(byte *palette);
 
 void I_FinishUpdate();
+
+void I_CheckSplitscreen();
 
 void I_NextScreen(int);
 

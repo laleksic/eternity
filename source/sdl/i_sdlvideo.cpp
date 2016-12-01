@@ -393,6 +393,14 @@ bool SDLVideoDriver::InitGraphicsMode()
    return false;
 }
 
+//
+// SDLVideoDriver::CheckSplitscreen
+//
+void SDLVideoDriver::CheckSplitscreen()
+{
+    I_Error("SDLVideoDriver::CheckSplitscreen: This video mode cannot run splitscreen. Please change your video mode to GL2D.\n");
+}
+
 // The one and only global instance of the SDL video driver.
 SDLVideoDriver i_sdlvideodriver;
 

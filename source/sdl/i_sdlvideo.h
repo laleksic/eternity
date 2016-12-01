@@ -49,6 +49,7 @@ public:
    virtual void ShutdownGraphics();
    virtual void ShutdownGraphicsPartway();
    virtual bool InitGraphicsMode();
+   virtual void CheckSplitscreen();
 };
 
 // Global singleton instance

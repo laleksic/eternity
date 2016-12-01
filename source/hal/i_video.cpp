@@ -190,7 +190,16 @@ void I_FinishUpdate()
 }
 
 //
-// I_FinishUpdate
+// I_NextScreen
+//
+void I_CheckSplitscreen()
+{
+    if(!noblit && in_graphics_mode)
+        i_video_driver->CheckSplitscreen();
+}
+
+//
+// I_NextScreen
 //
 void I_NextScreen(int screen)
 {
@@ -418,6 +427,15 @@ static bool I_InitGraphicsMode()
 
    if(!i_videomode)
       i_videomode = estrdup(i_default_videomode);
+
+   int players = 1;
+   for(int i = 1; i < MAXLOCALPLAYERS; i++)
+   {
+       if(playeringame[i])
+           players++;
+   }
+
+   video.views = players;
 
    // A false return value from HALVideoDriver::InitGraphicsMode means that no
    // errors have occured and we should continue with initialization.

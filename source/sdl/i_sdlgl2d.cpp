@@ -175,9 +175,12 @@ void SDLGL2DVideoDriver::DrawPixels(void *buffer, unsigned int destwidth)
 
 void SDLGL2DVideoDriver::CopyScreen(int screen)
 {
-    if(screen >= 0 && screen <= 3)
+    if(!use_arb_pbo)
     {
-        DrawPixels(framebuffer[screen], (unsigned int)video.width);
+        if(screen >= 0 && screen <= 3)
+        {
+            DrawPixels(framebuffer[screen], (unsigned int)video.width);
+        }
     }
 }
 
@@ -457,7 +460,7 @@ void SDLGL2DVideoDriver::LoadPBOExtension()
    // * Extensions must be enabled in general
    // * GL ARB PBO extension must be specifically enabled
    // * GL ARB PBO extension must be supported locally
-   if(want_arb_pbo && have_arb_pbo)
+   if(want_arb_pbo && have_arb_pbo && video.views == 1)
    {
       GETPROC(pglGenBuffersARB,    "glGenBuffersARB",    PFNGLGENBUFFERSARBPROC);
       GETPROC(pglDeleteBuffersARB, "glDeleteBuffersARB", PFNGLDELETEBUFFERSARBPROC);

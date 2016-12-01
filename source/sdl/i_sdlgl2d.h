@@ -56,6 +56,7 @@ public:
    virtual void ShutdownGraphicsPartway();
    virtual bool InitGraphicsMode();
    virtual void CopyScreen(int screen);
+   virtual void CheckSplitscreen() {}
 
    // Accessors
    void SetColorDepth(int cd) { colordepth = cd; }
