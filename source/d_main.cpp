@@ -579,16 +579,31 @@ void D_Display()
       R_FillBackScreen(scaledwindow);       // redraw backscreen
    }
 
+   static int staticPlayers = 0;
+   int playerCount = 0;
+
+   for(int i = 0; i < MAXLOCALPLAYERS; i++)
+   {
+       if(playeringame[i])
+       {
+           playerCount++;
+       }
+   }
+
+   if(staticPlayers != playerCount)
+   {
+      staticPlayers = playerCount;
+      I_SetMode();
+   }
+
    // save the current screen if about to wipe
    // no melting consoles
+
    if(gamestate != wipegamestate &&
        !(wipegamestate == GS_CONSOLE && gamestate != GS_LEVEL))
    {
-       I_SetMode();
-           Wipe_StartScreen();
+      Wipe_StartScreen();
    }
-
-      
 
    int oldDisplayPlayer = displayplayer;
 
