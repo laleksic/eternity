@@ -132,16 +132,16 @@ default_t defaults[] =
                MUS_DESCR),
 
    // haleyjd 04/15/02: SDL joystick device number
-   DEFAULT_INT("joystick_num 0", &i_joysticknum[0], NULL, -1, -1, UL, default_t::wad_no,
+   DEFAULT_INT("joystick_num0", &i_joysticknum[0], NULL, -1, -1, UL, default_t::wad_no,
                "SDL joystick device number (player 1), -1 to disable"),
 
-   DEFAULT_INT("joystick_num 1", &i_joysticknum[1], NULL, -1, -1, UL, default_t::wad_no,
+   DEFAULT_INT("joystick_num1", &i_joysticknum[1], NULL, -1, -1, UL, default_t::wad_no,
                "SDL joystick device number (player 2), -1 to disable"),
 
-   DEFAULT_INT("joystick_num 2", &i_joysticknum[2], NULL, -1, -1, UL, default_t::wad_no,
+   DEFAULT_INT("joystick_num2", &i_joysticknum[2], NULL, -1, -1, UL, default_t::wad_no,
                "SDL joystick device number (player 3), -1 to disable"),
 
-   DEFAULT_INT("joystick_num 3", &i_joysticknum[3], NULL, -1, -1, UL, default_t::wad_no,
+   DEFAULT_INT("joystick_num3", &i_joysticknum[3], NULL, -1, -1, UL, default_t::wad_no,
                "SDL joystick device number (player 4), -1 to disable"),
 
    // splitscreen

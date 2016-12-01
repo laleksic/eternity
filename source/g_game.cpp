@@ -2745,7 +2745,11 @@ void G_DoNewGame()
 
    if(localplayers > 1)
    {
-       GameType = (DefaultGameType == gt_single) ? gt_coop : DefaultGameType;
+       if(GameType == gt_single)
+       {
+           GameType = gt_coop;
+           G_SetDefaultDMFlags(0, false);
+       }
    }
 
    
