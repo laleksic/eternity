@@ -350,10 +350,10 @@ void G_BuildTiccmd(ticcmd_t *cmd, int pnum)
    // to support more than 16 weapons.
    //
  
-   if((!demo_compatibility && players[consoleplayer].attackdown &&
-       !P_CheckAmmo(&players[consoleplayer])) || gameactions[pnum][ka_nextweapon])
+   if((!demo_compatibility && players[pnum].attackdown &&
+       !P_CheckAmmo(&players[pnum])) || gameactions[pnum][ka_nextweapon])
    {
-      newweapon = P_SwitchWeapon(&players[consoleplayer]); // phares
+      newweapon = P_SwitchWeapon(&players[pnum]); // phares
    }
    else
    {                                 // phares 02/26/98: Added gamemode checks
@@ -385,7 +385,7 @@ void G_BuildTiccmd(ticcmd_t *cmd, int pnum)
       
       if(!demo_compatibility && doom_weapon_toggles)
       {
-         const player_t *player = &players[consoleplayer];
+         const player_t *player = &players[pnum];
 
          // only select chainsaw from '1' if it's owned, it's
          // not already in use, and the player prefers it or
@@ -421,9 +421,9 @@ void G_BuildTiccmd(ticcmd_t *cmd, int pnum)
 
    // haleyjd 03/06/09: next/prev weapon actions
    if(gameactions[pnum][ka_weaponup])
-      newweapon = P_NextWeapon(&players[consoleplayer]);
+      newweapon = P_NextWeapon(&players[pnum]);
    else if(gameactions[pnum][ka_weapondown])
-      newweapon = P_PrevWeapon(&players[consoleplayer]);
+      newweapon = P_PrevWeapon(&players[pnum]);
 
    if(newweapon != wp_nochange)
    {
