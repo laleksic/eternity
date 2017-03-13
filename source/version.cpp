@@ -27,10 +27,10 @@
 #include "version.h"
 
 // sf: made int from define
-int version = 340;
+int version = 342;
 
 // haleyjd: subversion -- range from 0 to 255
-unsigned char subversion = 48;
+unsigned char subversion = 1;
 
 const char version_date[] = __DATE__;
 const char version_time[] = __TIME__; // haleyjd

@@ -1023,7 +1023,7 @@ void S_UpdateSounds(const Mobj *listener)
          // killing. We do that here now instead.
          if(listener && S_CheckSectorKill(earsec[0], c->origin))
             S_StopChannel(cnum);
-         else if(c->origin && (PointThinker *)listener != c->origin) // killough 3/20/98
+         else if(c->origin && static_cast<const PointThinker *>(listener) != c->origin) // killough 3/20/98
          {
              fixed_t keyDist = INT_MAX;
              camera_t *keyCam = NULL;
