@@ -2766,6 +2766,7 @@ void G_DoNewGame()
            GameType = gt_coop;
            G_SetDefaultDMFlags(0, false);
        }
+       netgame = true;
    }
 
    
