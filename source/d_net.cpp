@@ -176,7 +176,7 @@ static void GetPackets()
 {
    int         netconsole;
    int         netnode;
-   ticcmd_t    *src, *dest;
+   //ticcmd_t    *src, *dest;
    int         realend;
    int         realstart;
    

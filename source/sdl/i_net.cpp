@@ -66,7 +66,7 @@ static IPaddress sendaddress[MAXNETNODES];
 
 static bool I_NetGetError()
 {
-   I_Error("I_NetGetError: Tried to get a packet without net init!\n");
+   //I_Error("I_NetGetError: Tried to get a packet without net init!\n");
    return false;
 }
 
