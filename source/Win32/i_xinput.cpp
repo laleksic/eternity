@@ -293,46 +293,14 @@ void XInputGamePad::poll()
 
 IMPLEMENT_RTTI_TYPE(XInputHapticInterface)
 
-// motor types
-enum motor_e
-{
-   MOTOR_LEFT,
-   MOTOR_RIGHT
-};
-
-//
-// Effect Base Class
-//
-class XIBaseEffect : public ZoneObject
-{
-protected:
-   uint32_t startTime;   
-   uint32_t duration;
-   static void AddClamped(XINPUT_VIBRATION &xvib, motor_e which, WORD addValue);
-
-   bool checkDone(uint32_t curTime) { return (curTime > startTime + duration); }
-
-public:
-   XIBaseEffect(uint32_t p_startTime, uint32_t p_duration);
-   virtual ~XIBaseEffect();
-
-   DLListItem<XIBaseEffect> links;
-
-   virtual void evolve(XINPUT_VIBRATION &xvib, uint32_t curTime) = 0;
-
-   static void RunEffectsList(XINPUT_VIBRATION &xvib, uint32_t curTime);
-   static void ClearEffectsList();
-};
-
-static DLList<XIBaseEffect, &XIBaseEffect::links> effects;
-
 //
 // XIBaseEffect Constructor
 //
-XIBaseEffect::XIBaseEffect(uint32_t p_startTime, uint32_t p_duration)
+XIBaseEffect::XIBaseEffect(effectsList_t& effects, uint32_t p_startTime, uint32_t p_duration)
    : ZoneObject(), startTime(p_startTime), duration(p_duration), links() 
 {
-   effects.insert(this);
+   pEffects = &effects;
+   pEffects->insert(this);
 }
 
 //
@@ -340,7 +308,7 @@ XIBaseEffect::XIBaseEffect(uint32_t p_startTime, uint32_t p_duration)
 //
 XIBaseEffect::~XIBaseEffect()
 {
-   effects.remove(this);
+   pEffects->remove(this);
 }
 
 //
@@ -380,7 +348,7 @@ void XIBaseEffect::AddClamped(XINPUT_VIBRATION &xvib, motor_e which, WORD addVal
 // Apply all the active effects to the XINPUT_VIBRATION structure. Effects are
 // deleted from the list when they expire automatically.
 //
-void XIBaseEffect::RunEffectsList(XINPUT_VIBRATION &xvib, uint32_t curTime)
+void XIBaseEffect::RunEffectsList(XINPUT_VIBRATION &xvib, uint32_t curTime, effectsList_t& effects)
 {
    auto link = effects.head;
 
@@ -397,7 +365,7 @@ void XIBaseEffect::RunEffectsList(XINPUT_VIBRATION &xvib, uint32_t curTime)
 //
 // Delete all active effects.
 //
-void XIBaseEffect::ClearEffectsList()
+void XIBaseEffect::ClearEffectsList(effectsList_t& effects)
 {
    auto link = effects.head;
 
@@ -428,9 +396,9 @@ protected:
    int      direction;
 
 public:
-   XILinearEffect(uint32_t p_startTime, uint32_t p_duration, motor_e p_which,
+   XILinearEffect(effectsList_t& effects, uint32_t p_startTime, uint32_t p_duration, motor_e p_which,
                   WORD p_initStrength, WORD p_endStrength)
-      : XIBaseEffect(p_startTime, p_duration), which(p_which), 
+      : XIBaseEffect(effects, p_startTime, p_duration), which(p_which), 
         initStrength(p_initStrength), endStrength(p_endStrength)
    {
       direction = (initStrength < endStrength) ? 1 : -1;
@@ -454,9 +422,9 @@ protected:
    WORD     maxStrength;    // maximum strength
 
 public:
-   XIRumbleEffect(uint32_t p_startTime, uint32_t p_duration, motor_e p_which,
+   XIRumbleEffect(effectsList_t& effects, uint32_t p_startTime, uint32_t p_duration, motor_e p_which,
                   WORD p_minStrength, WORD p_maxStrength)
-      : XIBaseEffect(p_startTime, p_duration), which(p_which), 
+      : XIBaseEffect(effects, p_startTime, p_duration), which(p_which), 
         minStrength(p_minStrength), maxStrength(p_maxStrength)
    {
    }
@@ -479,9 +447,9 @@ protected:
    static XIConstantEffect *CurrentRight;
 
 public:
-   XIConstantEffect(uint32_t p_startTime, uint32_t p_duration, motor_e p_which,
+   XIConstantEffect(effectsList_t& effects, uint32_t p_startTime, uint32_t p_duration, motor_e p_which,
                     WORD p_strength)
-      : XIBaseEffect(p_startTime, p_duration), which(p_which), strength(p_strength)
+      : XIBaseEffect(effects, p_startTime, p_duration), which(p_which), strength(p_strength)
    {
       // this effect is singleton
       if(which == MOTOR_LEFT)
@@ -523,8 +491,8 @@ protected:
    WORD strength;
 
 public:
-   XIDamageEffect(uint32_t p_startTime, uint32_t p_duration, WORD p_strength)
-      : XIBaseEffect(p_startTime, p_duration), strength(p_strength)
+   XIDamageEffect(effectsList_t& effects, uint32_t p_startTime, uint32_t p_duration, WORD p_strength)
+      : XIBaseEffect(effects, p_startTime, p_duration), strength(p_strength)
    {
    }
    virtual ~XIDamageEffect() {}
@@ -684,35 +652,35 @@ void XInputHapticInterface::startEffect(effect_e effect, int data1, int data2)
       // weapon fire 
       // * data1 should be power scale from 1 to 10
       // * data2 should be duration scale from 1 to 10
-      new XILinearEffect(curTime, 175 + 20 * data2, MOTOR_LEFT, 21000 + 4400 * data1, 0);
+      new XILinearEffect(effects, curTime, 175 + 20 * data2, MOTOR_LEFT, 21000 + 4400 * data1, 0);
       break;
    case EFFECT_RAMPUP:
       // ramping up effect, ie. for BFG warmup
       // * data1 is max strength, scale 1 to 10
       // * data2 is duration in ms
-      new XILinearEffect(curTime, data2, MOTOR_RIGHT, 1000, 21000 + 3100 * data1);
+      new XILinearEffect(effects, curTime, data2, MOTOR_RIGHT, 1000, 21000 + 3100 * data1);
       break;
    case EFFECT_RUMBLE: 
       // rumble effect 
       // * data1 should be richters from 1 to 10
       // * data2 should be duration in ms
-      new XIRumbleEffect(curTime, data2, MOTOR_LEFT, 0, 5000 + 6700 * (data1 - 1));
+      new XIRumbleEffect(effects, curTime, data2, MOTOR_LEFT, 0, 5000 + 6700 * (data1 - 1));
       break;
    case EFFECT_BUZZ:   
       // buzz; same as rumble, but uses high frequency motor
-      new XIRumbleEffect(curTime, data2, MOTOR_RIGHT, 0, 5000 + 6700 * (data1 - 1));
+      new XIRumbleEffect(effects, curTime, data2, MOTOR_RIGHT, 0, 5000 + 6700 * (data1 - 1));
       break;
    case EFFECT_CONSTANT:
       // constant: continue pulsing the motor at a steady rate
       // * data1 should be strength from 1 to 10
       // * data2 should be duration in ms
-      new XIConstantEffect(curTime, data2, MOTOR_RIGHT, 6500 * data1);
+      new XIConstantEffect(effects, curTime, data2, MOTOR_RIGHT, 6500 * data1);
       break;
    case EFFECT_DAMAGE:
       // damage: taking a hit from something
       // * data1 should be strength from 1 to 100
       // * data2 should be duration in ms
-      new XIDamageEffect(curTime, data2, 25000 + data1 * 400);
+      new XIDamageEffect(effects, curTime, data2, 25000 + data1 * 400);
       break;
    default:
       break;
@@ -756,7 +724,7 @@ void XInputHapticInterface::updateEffects()
    XINPUT_VIBRATION xvib = { 0, 0 };
    auto curTime = i_haltimer.GetTicks();
 
-   XIBaseEffect::RunEffectsList(xvib, curTime);
+   XIBaseEffect::RunEffectsList(xvib, curTime, effects);
    
    // set state to the device using the summation of the effects
    pXInputSetState(dwUserIndex, &xvib);
@@ -772,7 +740,7 @@ void XInputHapticInterface::clearEffects()
    zeroState();
    
    // clear effects
-   XIBaseEffect::ClearEffectsList();
+   XIBaseEffect::ClearEffectsList(effects);
 }
 
 #endif

@@ -33,6 +33,9 @@
 #ifdef EE_FEATURE_XINPUT
 
 #include "../hal/i_gamepads.h"
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <XInput.h>
 
 //
 // XInputGamePadDriver
@@ -49,7 +52,41 @@ public:
    virtual int  getBaseDeviceNum() { return 0; }
 };
 
+// motor types
+enum motor_e
+{
+    MOTOR_LEFT,
+    MOTOR_RIGHT
+};
+
 extern XInputGamePadDriver i_xinputGamePadDriver;
+//
+// Effect Base Class
+//
+class XIBaseEffect : public ZoneObject
+{
+public:
+    DLListItem<XIBaseEffect> links;
+    XIBaseEffect(DLList<XIBaseEffect, &XIBaseEffect::links>& effects, uint32_t p_startTime, uint32_t p_duration);
+    virtual ~XIBaseEffect();
+
+
+
+    virtual void evolve(XINPUT_VIBRATION &xvib, uint32_t curTime) = 0;
+
+    static void RunEffectsList(XINPUT_VIBRATION &xvib, uint32_t curTime, DLList<XIBaseEffect, &XIBaseEffect::links>& effects);
+    static void ClearEffectsList(DLList<XIBaseEffect, &XIBaseEffect::links>& effects);
+
+protected:
+    uint32_t startTime;
+    uint32_t duration;
+    static void AddClamped(XINPUT_VIBRATION &xvib, motor_e which, WORD addValue);
+
+    bool checkDone(uint32_t curTime) { return (curTime > startTime + duration); }
+
+    DLList<XIBaseEffect, &XIBaseEffect::links>* pEffects;
+};
+typedef DLList<XIBaseEffect, &XIBaseEffect::links> effectsList_t;
 
 //
 // XInputHapticInterface
@@ -65,6 +102,8 @@ protected:
    bool pauseState;
 
    void zeroState();
+
+   effectsList_t effects;
 
 public:
    XInputHapticInterface(unsigned long userIdx = 0);
