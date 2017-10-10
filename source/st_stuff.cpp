@@ -516,8 +516,8 @@ static void ST_updateFaceWidget(st_console_t *hud, player_t *player)
          {
             badguyangle = R_PointToAngle2(player->mo->x,
                                           player->mo->y,
-                                          player->attacker->x,
-                                          player->attacker->y);
+                                          getThingX(player->mo, player->attacker),
+                                          getThingY(player->mo, player->attacker));
 
             if(badguyangle > player->mo->angle)
             {
