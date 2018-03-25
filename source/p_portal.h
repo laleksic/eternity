@@ -90,18 +90,15 @@ int P_CreatePortalGroup(sector_t *from);
 //
 void P_GatherSectors(sector_t *from, int groupid);
 
+void P_FindPolyobjectSectorCouples();  // called in P_SpawnSpecials
+
 //
 // R_BuildLinkTable
 // Builds the link table. This should only be called after all the portals for
 // the level have been created.
 //
 bool P_BuildLinkTable();
-
-//
-// P_LinkRejectTable
-// Currently just clears each group for every other group.
-//
-void P_LinkRejectTable();
+void P_MarkPortalClusters();
 
 void P_InitPortals();
 
@@ -183,8 +180,8 @@ void P_SetCPortalBehavior(sector_t *sec, int newbehavior);
 //
 void P_SetLPortalBehavior(line_t *line, int newbehavior);
 
-void P_MoveLinkedPortal(portal_t *portal, fixed_t dx, fixed_t dy,
-                        bool movebehind);
+void P_MoveGroupCluster(int outgroup, int ingroup, bool *groupvisit, fixed_t dx,
+                        fixed_t dy, const polyobj_s *po);
 
 fixed_t P_CeilingPortalZ(const sector_t &sector);
 fixed_t P_FloorPortalZ(const sector_t &sector);

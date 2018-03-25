@@ -46,6 +46,7 @@
 #include "p_portal.h"
 #include "p_saveg.h"
 #include "p_setup.h"
+#include "p_slopes.h"
 #include "p_spec.h"
 #include "p_tick.h"
 #include "polyobj.h"
@@ -216,6 +217,7 @@ static void Polyobj_addVertex(polyobj_t *po, vertex_t *v)
                                 PU_LEVEL, NULL));
    }
    po->vertices[po->numVertices] = v;
+   v->polyindex = po->numVertices; // mark it for reference to the index.
    po->origVerts[po->numVertices] = *v;
    po->numVertices++;
 }
@@ -552,43 +554,51 @@ static void Polyobj_collectPortals(polyobj_t *po)
 }
 
 //
-// Polyobj_movePortals
-//
 // ioanch 20160226: moves the portals from the polyobject
 // The 'cancel' argument sets whether to keep or remove the reference
 //
-static void Polyobj_movePortals(const polyobj_t *po, fixed_t dx, fixed_t dy,
-                               bool cancel)
+static void Polyobj_moveLinkedPortals(const polyobj_t *po, fixed_t dx, fixed_t dy, bool cancel)
 {
+   bool *groupvisit = useportalgroups ? 
+      ecalloc(bool *, P_PortalGroupCount(), sizeof(bool)) : nullptr;
    for(size_t i = 0; i < po->numPortals; ++i)
    {
       portal_t *portal = po->portals[i];
       if(portal->type == R_LINKED)
       {
-         P_MoveLinkedPortal(portal, -dx, -dy, true);
-         const linkdata_t &ldata = portal->data.link;
+         linkdata_t &ldata = portal->data.link;
+         ldata.deltax -= dx;
+         ldata.deltay -= dy;
          portal_t *partner = ldata.polyportalpartner;
          if(partner)
-            P_MoveLinkedPortal(partner, dx, dy, false);
-         // mark the group as being moved by the portal or not.
-         gGroupPolyobject[ldata.toid] = cancel ? nullptr : po;
-      }
-      else if(portal->type == R_ANCHORED || portal->type == R_TWOWAY)
-      {
-         // FIXME: no partnership for R_TWOWAY. Maybe there should be one.
-         // TODO: this partnership. But only when we have a line-only special.
-         anchordata_t &adata = portal->data.anchor;
-         adata.transform.move.x -= M_FixedToDouble(dx);
-         adata.transform.move.y -= M_FixedToDouble(dy);
-
-         portal_t *partner = adata.polyportalpartner;
-         if(partner)
          {
-            partner->data.anchor.transform.move.x += M_FixedToDouble(dx);
-            partner->data.anchor.transform.move.y += M_FixedToDouble(dy);
+            partner->data.link.deltax += dx;
+            partner->data.link.deltay += dy;
          }
-         // no physical effects.
+         // mark the group as being moved by the portal or not.
+         P_MoveGroupCluster(ldata.fromid, ldata.toid, groupvisit, dx, dy, 
+            cancel ? nullptr : po);
       }
+   }
+   efree(groupvisit);
+}
+
+//
+// Rotates the portals from the poly.
+//
+static void Polyobj_updateAnchoredPortals(const polyobj_t &po)
+{
+   for(size_t i = 0; i < po.numPortals; ++i)
+   {
+      portal_t *portal = po.portals[i];
+      if(portal->type != R_ANCHORED && portal->type != R_TWOWAY)
+         continue;
+      anchordata_t &adata = portal->data.anchor;
+      adata.transform.updateFromLines(true);
+
+      portal_t *partner = adata.polyportalpartner;
+      if(partner)
+         partner->data.anchor.transform.updateFromLines(true);
    }
 }
 
@@ -645,18 +655,28 @@ static void Polyobj_moveToSpawnSpot(mapthing_t *anchor)
 
    // ioanch 20160226: update portal position
    Polyobj_collectPortals(po);
-   Polyobj_movePortals(po, -dist.x, -dist.y, false);
+   Polyobj_moveLinkedPortals(po, -dist.x, -dist.y, false);
 
    // translate vertices and record original coordinates relative to spawn spot
    for(i = 0; i < po->numVertices; ++i)
    {
       Polyobj_vecSub(po->vertices[i], &dist);
-
+      po->tmpVerts[i] = *po->vertices[i]; // backup position
       Polyobj_vecSub2(&(po->origVerts[i]), po->vertices[i], &sspot);
+   }
+
+   // Update sound origins
+   for(i = 0; i < po->numLines; ++i)
+   {
+      line_t &line = *po->lines[i];
+      line.soundorg.x = line.v1->x + line.dx / 2;
+      line.soundorg.y = line.v1->y + line.dy / 2;
    }
 
    Polyobj_setCenterPt(po);
    R_AttachPolyObject(po);
+
+   Polyobj_updateAnchoredPortals(*po); // finally update the anchored portals.
 }
 
 static void Polyobj_setCenterPt(polyobj_t *po)
@@ -981,11 +1001,17 @@ static bool Polyobj_moveXY(polyobj_t *po, fixed_t x, fixed_t y, bool onload = fa
       return false;
 
    // ioanch 20160226: update portal position
-   Polyobj_movePortals(po, x, y, false);
+   Polyobj_moveLinkedPortals(po, x, y, false);
 
    // translate vertices
    for(i = 0; i < po->numVertices; ++i)
+   {
+      if(!onload)
+         po->tmpVerts[i] = *po->vertices[i];
       Polyobj_vecAdd(po->vertices[i], &vec);
+      if(onload)
+         po->tmpVerts[i] = *po->vertices[i];
+   }
 
    // translate each line
    for(i = 0; i < po->numLines; ++i)
@@ -1008,7 +1034,10 @@ static bool Polyobj_moveXY(polyobj_t *po, fixed_t x, fixed_t y, bool onload = fa
          Polyobj_bboxSub(po->lines[i]->bbox, &vec);      
 
       // ioanch 20160226: update portal position
-      Polyobj_movePortals(po, -x, -y, true);
+      // CAREFUL: do not replace this and the previous call to a single call,
+      // because there's a lot of stuff going on in Polyobj_clipThings (e.g. things eaten by
+      // portals). Heavy testing needs to be done if you do so.
+      Polyobj_moveLinkedPortals(po, -x, -y, true);
    }
    else
    {
@@ -1031,6 +1060,8 @@ static bool Polyobj_moveXY(polyobj_t *po, fixed_t x, fixed_t y, bool onload = fa
       if(!onload)
          Polyobj_crossLines(po, oldcentre);
       R_AttachPolyObject(po);
+
+      Polyobj_updateAnchoredPortals(*po);
    }
 
    return !hitthing;
@@ -1044,18 +1075,18 @@ static bool Polyobj_moveXY(polyobj_t *po, fixed_t x, fixed_t y, bool onload = fa
 // http://www.inversereality.org/tutorials/graphics%20programming/2dtransformations.html
 // It is, of course, just a vector-matrix multiplication.
 //
-inline static void Polyobj_rotatePoint(vertex_t *v, const vertex_t *c, int ang)
+inline static void Polyobj_rotatePoint(vertex_t &v, v2fixed_t c, int ang)
 {
-   vertex_t tmp = *v;
+   const v2fixed_t tmp = { v.x, v.y };
 
-   v->x = FixedMul(tmp.x, finecosine[ang]) - FixedMul(tmp.y,   finesine[ang]);
-   v->y = FixedMul(tmp.x,   finesine[ang]) + FixedMul(tmp.y, finecosine[ang]);
+   v.x = FixedMul(tmp.x, finecosine[ang]) - FixedMul(tmp.y,   finesine[ang]);
+   v.y = FixedMul(tmp.x,   finesine[ang]) + FixedMul(tmp.y, finecosine[ang]);
 
-   v->x += c->x;
-   v->y += c->y;
+   v.x += c.x;
+   v.y += c.y;
 
-   v->fx = M_FixedToFloat(v->x);
-   v->fy = M_FixedToFloat(v->y);
+   v.fx = M_FixedToFloat(v.x);
+   v.fy = M_FixedToFloat(v.y);
 }
 
 //
@@ -1105,6 +1136,10 @@ static void Polyobj_rotateLine(line_t *ld)
    // 04/19/09: reposition sound origin
    ld->soundorg.x = v1->x + ld->dx / 2;
    ld->soundorg.y = v1->y + ld->dy / 2;
+
+   // Also update the normals if necessary
+   if(ld->portal && R_portalIsAnchored(ld->portal))
+      P_MakeLineNormal(ld);
 }
 
 //
@@ -1115,7 +1150,7 @@ static void Polyobj_rotateLine(line_t *ld)
 static bool Polyobj_rotate(polyobj_t *po, angle_t delta, bool onload = false)
 {
    int i, angle;
-   vertex_t origin;
+   v2fixed_t origin;
    bool hitthing = false;
 
    // don't move bad polyobjects
@@ -1134,9 +1169,11 @@ static bool Polyobj_rotate(polyobj_t *po, angle_t delta, bool onload = false)
       po->tmpVerts[i] = *(po->vertices[i]);
 
       // use original pts to rotate to new position
+      v2fixed_t backup = { po->vertices[i]->x, po->vertices[i]->y };
+      v2float_t fbackup = { po->vertices[i]->fx, po->vertices[i]->fy };
       *(po->vertices[i]) = po->origVerts[i];
 
-      Polyobj_rotatePoint(po->vertices[i], &origin, angle);
+      Polyobj_rotatePoint(*po->vertices[i], origin, angle);
    }
 
    // rotate lines
@@ -1172,6 +1209,8 @@ static bool Polyobj_rotate(polyobj_t *po, angle_t delta, bool onload = false)
       if(!onload)
          Polyobj_crossLines(po, oldcentre);
       R_AttachPolyObject(po);
+
+      Polyobj_updateAnchoredPortals(*po);
    }
 
    return !hitthing;
@@ -1222,6 +1261,16 @@ typedef struct mobjqitem_s
 } mobjqitem_t;
 
 //
+// Check if mobj is a polyobject spawn spot
+//
+bool Polyobj_IsSpawnSpot(const Mobj &mo)
+{
+   return mo.info->doomednum == POLYOBJ_SPAWN_DOOMEDNUM ||
+      mo.info->doomednum == POLYOBJ_SPAWNCRUSH_DOOMEDNUM ||
+      mo.info->doomednum == POLYOBJ_SPAWNDAMAGE_DOOMEDNUM;
+}
+
+//
 // Polyobj_InitLevel
 //
 // Called at the beginning of each map after all other line and thing
@@ -1252,9 +1301,7 @@ void Polyobj_InitLevel(void)
       Mobj *mo;
       if((mo = thinker_cast<Mobj *>(th)))
       {
-         if(mo->info->doomednum == POLYOBJ_SPAWN_DOOMEDNUM ||
-            mo->info->doomednum == POLYOBJ_SPAWNCRUSH_DOOMEDNUM ||
-            mo->info->doomednum == POLYOBJ_SPAWNDAMAGE_DOOMEDNUM)
+         if(Polyobj_IsSpawnSpot(*mo))
          {
             ++numPolyObjects;
             
@@ -1293,6 +1340,9 @@ void Polyobj_InitLevel(void)
          
          Polyobj_spawnPolyObj(i, qitem->mo, qitem->mo->spawnpoint.angle);
       }
+
+      // Used to get portal clusters when moving polyobjects.
+      P_MarkPortalClusters();
 
       // move polyobjects to spawn points
       for(i = 0; i < numAnchors; ++i)

@@ -902,7 +902,7 @@ void A_Saw(actionargs_t *actionargs)
 
    if(angle - mo->angle > ANG180)
    {
-      if(angle - mo->angle < -ANG90/20)
+      if(angle - mo->angle < static_cast<angle_t>(-ANG90/20))
          mo->angle = angle + ANG90/21;
       else
          mo->angle -= ANG90/20;
@@ -1022,7 +1022,7 @@ void A_FireOldBFG(actionargs_t *actionargs)
                an = mo->angle;
             }
          }
-         while(mask && (void(mask=0), !clip.linetarget));     // killough 8/2/98
+         while(mask && (mask=0, !clip.linetarget));     // killough 8/2/98
          an1 += an - mo->angle;
          // sf: despite killough's infinite wisdom.. even
          // he is prone to mistakes. seems negative numbers
@@ -1105,7 +1105,7 @@ void P_BulletSlope(Mobj *mo)
       if(!clip.linetarget)
          bulletslope = P_AimLineAttack(mo, an -= 2<<26, 16*64*FRACUNIT, mask);
    }
-   while (mask && (void(mask=0), !clip.linetarget));  // killough 8/2/98
+   while (mask && (mask=0, !clip.linetarget));  // killough 8/2/98
 }
 
 //
@@ -1334,7 +1334,7 @@ void A_BFGSpray(actionargs_t *actionargs)
       
       // killough 8/2/98: make autoaiming prefer enemies
       if(demo_version < 203 || 
-         (void(P_AimLineAttack(mo->target, an, 16*64*FRACUNIT, MF_FRIEND)),
+         (P_AimLineAttack(mo->target, an, 16*64*FRACUNIT, MF_FRIEND),
          !clip.linetarget))
          P_AimLineAttack(mo->target, an, 16*64*FRACUNIT, 0);
       
@@ -1564,6 +1564,9 @@ void P_MovePsprites(player_t *player)
    // a null state means not active
    // drop tic count and possibly change state
    // a -1 tic count never changes
+
+   player->psprites[ps_weapon].backupPosition();
+   player->psprites[ps_flash].backupPosition();
    
    for(i = 0; i < NUMPSPRITES; ++i, ++psp)
    {
@@ -1844,7 +1847,7 @@ void A_CustomPlayerMelee(actionargs_t *actionargs)
    {
       if(angle - mo->angle > ANG180)
       {
-         if(angle - mo->angle < -ANG90/20)
+         if(angle - mo->angle < static_cast<angle_t>(-ANG90/20))
             mo->angle = angle + ANG90/21;
          else
             mo->angle -= ANG90/20;
