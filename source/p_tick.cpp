@@ -35,6 +35,7 @@
 #include "p_anim.h"
 #include "p_chase.h"
 #include "p_saveg.h"
+#include "p_scroll.h"
 #include "p_sector.h"
 #include "p_spec.h"
 #include "p_tick.h"
@@ -76,11 +77,9 @@ IMPLEMENT_RTTI_TYPE(Thinker)
 //
 void Thinker::InitThinkers(void)
 {
-   int i;
-   
-   for(i = 0; i < NUMTHCLASS; i++)  // killough 8/29/98: initialize threaded lists
-      thinkerclasscap[i].cprev = thinkerclasscap[i].cnext = &thinkerclasscap[i];
-   
+   for(Thinker &thinker : thinkerclasscap)  // killough 8/29/98: initialize threaded lists
+      thinker.cprev = thinker.cnext = &thinker;
+
    thinkercap.prev = thinkercap.next  = &thinkercap;
 }
 
@@ -284,6 +283,8 @@ void P_Ticker()
    P_SaveSectorPositions();
    // save dynaseg positions (or reset them to avoid shaking)
    R_SaveDynasegPositions();
+   // Reset any interpolated scrolled sidedefs
+   P_TicResetLerpScrolledSides();
    
    P_ParticleThinker(); // haleyjd: think for particles
 

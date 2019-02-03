@@ -1,44 +1,32 @@
-// Emacs style mode select   -*- C++ -*-
-//-----------------------------------------------------------------------------
 //
-// Copyright 1998-2012 Randy Heit  All rights reserved.
+// The Eternity Engine
+// Copyright (C) 2018 James Haley et al.
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions 
-// are met:
+// ZDoom
+// Copyright (C) 1998-2012 Marisa Heit
 //
-// 1. Redistributions of source code must retain the above copyright
-//    notice, this list of conditions and the following disclaimer.
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-// 2. Redistributions in binary form must reproduce the above copyright
-//    notice, this list of conditions and the following disclaimer in the
-//    documentation and/or other materials provided with the distribution.
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
 //
-// 3. The name of the author may not be used to endorse or promote products
-//    derived from this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE AUTHOR "AS IS" AND ANY EXPRESS OR
-// IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
-// OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-// IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
-// INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
-// NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
-// THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see http://www.gnu.org/licenses/
 //
 //--------------------------------------------------------------------------
 //
-// DESCRIPTION:
+// Purpose: 3D Mobj Clipping Code.
+//          Largely from ZDoom, this system seems to be more reliable than our old one.
+//          It is also kept totally separate from the old clipping code to avoid the
+//          entangling problems the earlier code had.
+// Authors: James Haley, Ioan Chera, Max Waine
 //
-// 3D Mobj Clipping Code
-//
-// Largely from zdoom, this system seems to be more reliable than our old one.
-// It is also kept totally separate from the old clipping code to avoid the
-// entangling problems the earlier code had.
-//
-//-----------------------------------------------------------------------------
+
 
 #include "z_zone.h"
 
@@ -53,6 +41,7 @@
 #include "p_maputl.h"
 #include "p_mobjcol.h"
 #include "p_inter.h"
+#include "p_map3d.h"
 #include "p_portal.h"
 #include "p_portalclip.h"  // ioanch 20160115
 #include "p_portalcross.h"
@@ -84,7 +73,7 @@ bool P_Use3DClipping()
 // without any side-effects so that it's reversible: the only thing changed
 // is mo->z, which will be reset before the real move takes place.
 //
-static void P_ZMovementTest(Mobj *mo)
+void P_ZMovementTest(Mobj *mo)
 {
    // killough 7/11/98:
    // BFG fireballs bounced on floors and ceilings in Pre-Beta Doom
@@ -95,9 +84,9 @@ static void P_ZMovementTest(Mobj *mo)
    {
       mo->z += mo->momz;
             
-      if(mo->z <= mo->floorz)                  // bounce off floors
+      if(mo->z <= mo->zref.floor)                  // bounce off floors
       {
-         mo->z = mo->floorz;
+         mo->z = mo->zref.floor;
 
          if(mo->momz < 0)
          {
@@ -109,9 +98,9 @@ static void P_ZMovementTest(Mobj *mo)
                goto floater;
          }
       }
-      else if(mo->z >= mo->ceilingz - mo->height) // bounce off ceilings
+      else if(mo->z >= mo->zref.ceiling - mo->height) // bounce off ceilings
       {
-         mo->z = mo->ceilingz - mo->height;
+         mo->z = mo->zref.ceiling - mo->height;
          if(mo->momz > 0)
          {
             if(!(mo->subsector->sector->intflags & SIF_SKY))
@@ -150,47 +139,58 @@ floater:
    }
 
    // haleyjd 06/05/12: flying players
-   if(mo->player && mo->flags4 & MF4_FLY && mo->z > mo->floorz)
+   if(mo->player && mo->flags4 & MF4_FLY && mo->z > mo->zref.floor)
       mo->z += finesine[(FINEANGLES / 80 * leveltime) & FINEMASK] / 8;
 
    // clip movement
    
-   if(mo->z <= mo->floorz)
-      mo->z = mo->floorz;
+   if(mo->z <= mo->zref.floor)
+      mo->z = mo->zref.floor;
 
-   if(mo->z + mo->height > mo->ceilingz)
-      mo->z = mo->ceilingz - mo->height;
+   if(mo->z + mo->height > mo->zref.ceiling)
+      mo->z = mo->zref.ceiling - mo->height;
 }
 
 static Mobj *testz_mobj; // used to hold object found by P_TestMobjZ
+
+//
+// Data to carry to testmobjz
+//
+struct testmobjzdata_t
+{
+   doom_mapinter_t &clip;
+   Mobj *&testz_mobj;
+};
 
 //
 // PIT_TestMobjZ
 //
 // Derived from zdoom; iterator function for P_TestMobjZ
 //
-static bool PIT_TestMobjZ(Mobj *thing)
+static bool PIT_TestMobjZ(Mobj *thing, void *context)
 {
-   fixed_t blockdist = thing->radius + clip.thing->radius;
+   testmobjzdata_t &data = *static_cast<testmobjzdata_t *>(context);
+
+   fixed_t blockdist = thing->radius + data.clip.thing->radius;
 
    if(!(thing->flags & MF_SOLID) ||                      // non-solid?
       thing->flags & (MF_SPECIAL|MF_NOCLIP) || // other is special?
-      clip.thing->flags & MF_SPECIAL ||                   // this is special?
-      thing == clip.thing ||                              // same as self?
-      clip.thing->z > thing->z + thing->height ||         // over?
-      clip.thing->z + clip.thing->height <= thing->z)      // under?
+      data.clip.thing->flags & MF_SPECIAL ||                   // this is special?
+      thing == data.clip.thing ||                              // same as self?
+      data.clip.thing->z > thing->z + thing->height ||         // over?
+      data.clip.thing->z + data.clip.thing->height <= thing->z)      // under?
    {
       return true;
    }
 
    // test against collision - from PIT_CheckThing:
    // ioanch 20160110: portal aware
-   if(D_abs(getThingX(clip.thing, thing) - clip.x) >= blockdist || 
-      D_abs(getThingY(clip.thing, thing) - clip.y) >= blockdist)
+   if(D_abs(getThingX(data.clip.thing, thing) - data.clip.x) >= blockdist ||
+      D_abs(getThingY(data.clip.thing, thing) - data.clip.y) >= blockdist)
       return true;
 
    // the thing may be blocking; save a pointer to it
-   testz_mobj = thing;
+   data.testz_mobj = thing;
    return false;
 }
 
@@ -199,7 +199,7 @@ static bool PIT_TestMobjZ(Mobj *thing)
 //
 // From zdoom; tests a thing's z position for validity.
 //
-bool P_TestMobjZ(Mobj *mo)
+bool P_TestMobjZ(Mobj *mo, doom_mapinter_t &clip, Mobj **testz_mobj)
 {
    // a no-clipping thing is always good
    if(mo->flags & MF_NOCLIP)
@@ -222,10 +222,12 @@ bool P_TestMobjZ(Mobj *mo)
    bbox[BOXBOTTOM] = clip.bbox[BOXBOTTOM] - MAXRADIUS;
    bbox[BOXTOP] = clip.bbox[BOXTOP] + MAXRADIUS;
 
-   if(!P_TransPortalBlockWalker(bbox, mo->groupid, true, nullptr, 
+   testmobjzdata_t data = { clip, testz_mobj ? *testz_mobj : ::testz_mobj };
+
+   if(!P_TransPortalBlockWalker(bbox, mo->groupid, true, &data,
       [](int x, int y, int groupid, void *data) -> bool
    {
-      return P_BlockThingsIterator(x, y, groupid, PIT_TestMobjZ);
+      return P_BlockThingsIterator(x, y, groupid, PIT_TestMobjZ, data);
    }))
       return false;
 
@@ -246,7 +248,7 @@ Mobj *P_GetThingUnder(Mobj *mo)
    // fake the move, then test
    P_ZMovementTest(mo);
    testz_mobj = NULL;
-   P_TestMobjZ(mo);
+   P_TestMobjZ(mo, clip);
 
    // restore z
    mo->z = mo_z;
@@ -360,10 +362,10 @@ static bool PIT_CheckThing3D(Mobj *thing) // killough 3/26/98: make static
    {
       // [RH] Let monsters walk on actors as well as floors
       if(((clip.thing->flags & MF_COUNTKILL) || (clip.thing->flags3 & MF3_KILLABLE)) &&
-         topz >= clip.floorz && topz <= clip.thing->z + STEPSIZE)
+         topz >= clip.zref.floor && topz <= clip.thing->z + STEPSIZE)
       {
          stepthing = thing;
-         clip.floorz = topz;
+         clip.zref.floor = topz;
       }
    }
 
@@ -388,7 +390,14 @@ static bool PIT_CheckThing3D(Mobj *thing) // killough 3/26/98: make static
       }
 
       if((clip.thing->z >= topz) || (clip.thing->z + clip.thing->height <= thing->z))
+      {
+         if(thing->flags & MF_SPECIAL && clip.thing->z >= topz &&
+            clip.thing->z - thing->z <= GameModeInfo->itemHeight)
+         {
+            return P_CheckPickUp(thing);
+         }
          return true;
+      }
    }
 
    // killough 11/98:
@@ -556,7 +565,7 @@ static bool PIT_CheckThing3D(Mobj *thing) // killough 3/26/98: make static
 //
 // A 3D version of P_CheckPosition.
 //
-bool P_CheckPosition3D(Mobj *thing, fixed_t x, fixed_t y) 
+bool P_CheckPosition3D(Mobj *thing, fixed_t x, fixed_t y, PODCollection<line_t *> *pushhit) 
 {
    subsector_t *newsubsec;
    fixed_t thingdropoffz;
@@ -600,25 +609,25 @@ bool P_CheckPosition3D(Mobj *thing, fixed_t x, fixed_t y)
    {
       bottomsector = P_ExtremeSectorAtPoint(x, y, false, 
          newsubsec->sector);
-      clip.floorz = clip.dropoffz = bottomsector->floorheight;
+      clip.zref.floor = clip.zref.dropoff = bottomsector->floorheight;
    }
    else
 #endif
-      clip.floorz = clip.dropoffz = newsubsec->sector->floorheight;
+      clip.zref.floor = clip.zref.dropoff = newsubsec->sector->floorheight;
 
 #ifdef R_LINKEDPORTALS
    if(demo_version >= 333 && newsubsec->sector->c_pflags & PS_PASSABLE &&
       !(clip.thing->flags & MF_NOCLIP))
    {
-      clip.ceilingz = P_ExtremeSectorAtPoint(x, y, true, 
+      clip.zref.ceiling = P_ExtremeSectorAtPoint(x, y, true,
          newsubsec->sector)->ceilingheight;
    }
    else
 #endif
-      clip.ceilingz = newsubsec->sector->ceilingheight;
+      clip.zref.ceiling = newsubsec->sector->ceilingheight;
 
-   clip.secfloorz = clip.passfloorz = clip.floorz;
-   clip.secceilz = clip.passceilz = clip.ceilingz;
+   clip.zref.secfloor = clip.zref.passfloor = clip.zref.floor;
+   clip.zref.secceil = clip.zref.passceil = clip.zref.ceiling;
 
    // haleyjd
    // ioanch 20160114: use bottom sector
@@ -726,8 +735,8 @@ bool P_CheckPosition3D(Mobj *thing, fixed_t x, fixed_t y)
 
    memcpy(bbox, clip.bbox, sizeof(bbox));
    
-   thingdropoffz = clip.floorz;
-   clip.floorz = clip.dropoffz;
+   thingdropoffz = clip.zref.floor;
+   clip.zref.floor = clip.zref.dropoff;
 
    // ioanch 20160121: reset portalhits and thing-visited groups
    clip.numportalhit = 0;
@@ -738,11 +747,11 @@ bool P_CheckPosition3D(Mobj *thing, fixed_t x, fixed_t y)
    }
 
    // ioanch 20160112: portal-aware
-   if(!P_TransPortalBlockWalker(bbox, thing->groupid, true, nullptr, 
+   if(!P_TransPortalBlockWalker(bbox, thing->groupid, true, pushhit, 
       [](int x, int y, int groupid, void *data) -> bool
    {
       // ioanch 20160112: try 3D portal check-line
-      if(!P_BlockLinesIterator(x, y, PIT_CheckLine3D, groupid))
+      if(!P_BlockLinesIterator(x, y, PIT_CheckLine3D, groupid, data))
          return false; // doesn't fit
       return true;
    }))
@@ -755,15 +764,15 @@ bool P_CheckPosition3D(Mobj *thing, fixed_t x, fixed_t y)
    {
       // they will not change the spechit list
       if(gGroupVisit[clip.portalhit[i].ld->frontsector->groupid])
-         if(!PIT_CheckLine3D(clip.portalhit[i].ld, clip.portalhit[i].po))
+         if(!PIT_CheckLine3D(clip.portalhit[i].ld, clip.portalhit[i].po, pushhit))
             return false;
    }
 
-   if(clip.ceilingz - clip.floorz < thing->height)
+   if(clip.zref.ceiling - clip.zref.floor < thing->height)
       return false;
          
    if(stepthing != NULL)
-      clip.dropoffz = thingdropoffz;
+      clip.zref.dropoff = thingdropoffz;
    
    return (clip.BlockingMobj = thingblocker) == NULL;
 }
@@ -772,7 +781,7 @@ bool P_CheckPosition3D(Mobj *thing, fixed_t x, fixed_t y)
 // P_CheckPositionExt
 //
 // Calls the 3D version of P_CheckPosition, and also performs an additional
-// floorz/ceilingz clip. This is just for testing, and stuff like collecting
+// zref.floor/zref.ceiling clip. This is just for testing, and stuff like collecting
 // powerups and exploding touchy objects won't happen.
 //
 bool P_CheckPositionExt(Mobj *mo, fixed_t x, fixed_t y, fixed_t z)
@@ -829,16 +838,9 @@ static bool P_AdjustFloorCeil(Mobj *thing, bool midtex)
    if(midtex)
       thing->flags3 |= MF3_PASSMOBJ;
 
+   // don't trigger push specials when moving strictly vertically.
    isgood = P_CheckPosition3D(thing, thing->x, thing->y);
-
-   thing->floorz     = clip.floorz;
-   thing->secfloorz  = clip.secfloorz;
-   thing->passfloorz = clip.passfloorz;
-   thing->ceilingz   = clip.ceilingz;
-   thing->secceilz   = clip.secceilz;
-   thing->passceilz  = clip.passceilz;
-   thing->dropoffz   = clip.dropoffz; // killough 11/98: remember dropoffs
-   
+   thing->zref = clip.zref;   // killough 11/98: remember dropoffs
    thing->flags3 = oldfl3;
 
    // no sector linear interpolation tic
@@ -863,6 +865,15 @@ static bool P_AdjustFloorCeil(Mobj *thing, bool midtex)
 }
 
 //
+// Data for finding intersectors
+//
+struct intersectordata_t
+{
+   doom_mapinter_t &clip;
+   MobjCollection &intersectors;
+};
+
+//
 // PIT_FindAboveIntersectors
 //
 // haleyjd: From zdoom. I was about to implement this exact type of iterative
@@ -871,32 +882,38 @@ static bool P_AdjustFloorCeil(Mobj *thing, bool midtex)
 // over/under situations with an object being moved by a sector floor or
 // ceiling so that they can be dealt with uniformly at one time.
 //
-static bool PIT_FindAboveIntersectors(Mobj *thing)
+static bool PIT_FindAboveIntersectors(Mobj *thing, void *context)
 {
+   intersectordata_t &data = *static_cast<intersectordata_t *>(context);
+
    fixed_t blockdist;
    if(!(thing->flags & MF_SOLID) ||               // Can't hit thing?
       (thing->flags & MF_SPECIAL) ||  // Corpse or special?
-      thing == clip.thing)                         // clipping against self?
+      thing == data.clip.thing)                         // clipping against self?
       return true;
    
-   blockdist = thing->radius + clip.thing->radius;
+   blockdist = thing->radius + data.clip.thing->radius;
    
    // Be portal aware
-   const linkoffset_t *link = P_GetLinkOffset(clip.thing->groupid, thing->groupid);
+   const linkoffset_t *link = P_GetLinkOffset(data.clip.thing->groupid,
+                                              thing->groupid);
 
    // Didn't hit thing?
-   if(D_abs(thing->x - link->x - clip.x) >= blockdist || 
-      D_abs(thing->y - link->y - clip.y) >= blockdist)
+   if(D_abs(thing->x - link->x - data.clip.x) >= blockdist ||
+      D_abs(thing->y - link->y - data.clip.y) >= blockdist)
       return true;
 
    // Thing intersects above the base?
-   if(thing->z >= clip.thing->z && thing->z <= clip.thing->z + clip.thing->height)
-      intersectors.add(thing);
+   if(thing->z >= data.clip.thing->z &&
+      thing->z <= data.clip.thing->z + data.clip.thing->height)
+   {
+      data.intersectors.add(thing);
+   }
 
    return true;
 }
 
-bool PIT_FindBelowIntersectors(Mobj *thing)
+static bool PIT_FindBelowIntersectors(Mobj *thing, void *context)
 {
    fixed_t blockdist;
    if(!(thing->flags & MF_SOLID) ||               // Can't hit thing?
@@ -930,7 +947,8 @@ bool PIT_FindBelowIntersectors(Mobj *thing)
 // Finds all the things above the thing being moved and puts them into an
 // MobjCollection (this is partially explained above). From zdoom.
 //
-static void P_FindAboveIntersectors(Mobj *actor)
+void P_FindAboveIntersectors(Mobj *actor, doom_mapinter_t &clip,
+                             MobjCollection &coll)
 {
    fixed_t x, y;
 
@@ -955,9 +973,12 @@ static void P_FindAboveIntersectors(Mobj *actor)
    bbox[BOXBOTTOM] = clip.bbox[BOXBOTTOM] - MAXRADIUS;
    bbox[BOXTOP] = clip.bbox[BOXTOP] + MAXRADIUS;
 
-   if(!P_TransPortalBlockWalker(bbox, actor->groupid, true, nullptr,
+   intersectordata_t data = { clip, coll };
+
+   if(!P_TransPortalBlockWalker(bbox, actor->groupid, true, &data,
       [](int x, int y, int groupid, void *data) -> bool {
-      return P_BlockThingsIterator(x, y, groupid, PIT_FindAboveIntersectors);
+      return P_BlockThingsIterator(x, y, groupid, PIT_FindAboveIntersectors,
+                                   data);
    }))
       return;
 
@@ -1083,10 +1104,10 @@ static int P_PushUp(Mobj *thing)
    unsigned int lastintersect;
    int mymass = thing->info->mass;
 
-   if(thing->z + thing->height > thing->ceilingz)
+   if(thing->z + thing->height > thing->zref.ceiling)
       return 1;
 
-   P_FindAboveIntersectors(thing);
+   P_FindAboveIntersectors(thing, clip, intersectors);
    lastintersect = static_cast<unsigned>(intersectors.getLength());
    for(; firstintersect < lastintersect; ++firstintersect)
    {
@@ -1127,7 +1148,7 @@ static int P_PushDown(Mobj *thing)
    unsigned int lastintersect;
    int mymass = thing->info->mass;
 
-   if(thing->z <= thing->floorz)
+   if(thing->z <= thing->zref.floor)
       return 1;
 
    P_FindBelowIntersectors(thing);
@@ -1172,7 +1193,7 @@ static int P_PushDown(Mobj *thing)
 //
 static void PIT_FloorDrop(Mobj *thing)
 {
-   fixed_t oldfloorz = thing->floorz;
+   fixed_t oldfloorz = thing->zref.floor;
    
    P_AdjustFloorCeil(thing, midtex_moving);
    
@@ -1184,12 +1205,12 @@ static void PIT_FloorDrop(Mobj *thing)
       // and only do it if the drop is slow enough.
       if(thing->flags2 & MF2_FLOATBOB)
       {
-         thing->z = thing->z - oldfloorz + thing->floorz;
+         thing->z = thing->z - oldfloorz + thing->zref.floor;
       }
       else if((thing->flags & MF_NOGRAVITY) || 
-              thing->z - thing->floorz <= moveamt)
+              thing->z - thing->zref.floor <= moveamt)
       {
-         thing->z = thing->floorz;
+         thing->z = thing->zref.floor;
       }
    }
 }
@@ -1201,12 +1222,12 @@ static void PIT_FloorDrop(Mobj *thing)
 //
 static void PIT_FloorRaise(Mobj *thing)
 {
-   fixed_t oldfloorz = thing->floorz;
+   fixed_t oldfloorz = thing->zref.floor;
    
    P_AdjustFloorCeil(thing, midtex_moving);
 
    // Move things intersecting the floor up
-   if(thing->z <= thing->floorz ||
+   if(thing->z <= thing->zref.floor ||
       (!(thing->flags & MF_NOGRAVITY) && (thing->flags2 & MF2_FLOATBOB)))
    {
       fixed_t oldz = thing->z;
@@ -1214,9 +1235,9 @@ static void PIT_FloorRaise(Mobj *thing)
       intersectors.makeEmpty();
 
       if(!(thing->flags2 & MF2_FLOATBOB))
-         thing->z = thing->floorz;
+         thing->z = thing->zref.floor;
       else
-         thing->z = thing->z - oldfloorz + thing->floorz;
+         thing->z = thing->z - oldfloorz + thing->zref.floor;
 
       switch(P_PushUp(thing))
       {
@@ -1240,17 +1261,17 @@ static void PIT_CeilingLower(Mobj *thing)
 {
    bool onfloor;
    
-   onfloor = thing->z <= thing->floorz;
+   onfloor = thing->z <= thing->zref.floor;
    P_AdjustFloorCeil(thing, midtex_moving);
 
-   if(thing->z + thing->height > thing->ceilingz)
+   if(thing->z + thing->height > thing->zref.ceiling)
    {
       intersectors.makeEmpty();
 
-      if(thing->ceilingz - thing->height >= thing->floorz)
-         thing->z = thing->ceilingz - thing->height;
+      if(thing->zref.ceiling - thing->height >= thing->zref.floor)
+         thing->z = thing->zref.ceiling - thing->height;
       else
-         thing->z = thing->floorz;
+         thing->z = thing->zref.floor;
 
       switch(P_PushDown(thing))
       {
@@ -1258,7 +1279,7 @@ static void PIT_CeilingLower(Mobj *thing)
          // intentional fall-through
       case 1:
          if(onfloor)
-            thing->z = thing->floorz;
+            thing->z = thing->zref.floor;
          P_DoCrunch(thing);
          break;
       default:
@@ -1277,20 +1298,20 @@ static void PIT_CeilingRaise(Mobj *thing)
    // For DOOM compatibility, only move things that are inside the floor.
    // (or something else?) Things marked as hanging from the ceiling will
    // stay where they are.
-   if(thing->z < thing->floorz &&
-      thing->z + thing->height >= thing->ceilingz - moveamt)
+   if(thing->z < thing->zref.floor &&
+      thing->z + thing->height >= thing->zref.ceiling - moveamt)
    {
-      thing->z = thing->floorz;
+      thing->z = thing->zref.floor;
 
-      if(thing->z + thing->height > thing->ceilingz)
-         thing->z = thing->ceilingz - thing->height;
+      if(thing->z + thing->height > thing->zref.ceiling)
+         thing->z = thing->zref.ceiling - thing->height;
    }
    else if(/*(thing->flags3 & MF3_PASSMOBJ) &&*/ !isgood && 
-           thing->z + thing->height < thing->ceilingz)
+           thing->z + thing->height < thing->zref.ceiling)
    {
-      if(!P_TestMobjZ(thing) && testz_mobj->z <= thing->z)
+      if(!P_TestMobjZ(thing, clip) && testz_mobj->z <= thing->z)
       {
-         fixed_t ceildiff = thing->ceilingz - thing->height;
+         fixed_t ceildiff = thing->zref.ceiling - thing->height;
          fixed_t thingtop = testz_mobj->z + testz_mobj->height;
          
          thing->z = ceildiff < thingtop ? ceildiff : thingtop;

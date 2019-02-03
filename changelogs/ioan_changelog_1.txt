@@ -8,6 +8,307 @@ Since v4.00.00 "Völuspá"
 ========================
 
 --------------------------------------------------------------------------------
+27.01.2019
+
+IMPROVEMENT: F_SKY1 now when applied on middle textures has the same effect as
+             floor and ceiling skies.
+
+--------------------------------------------------------------------------------
+25.01.2019
+
+IMPROVEMENT: Added some UDMF-exclusive fields to ExtraData: linedef portalid and
+             sector portalid.floor and portalid.ceiling, so that Portal_Define
+             doesn't require UDMF any longer.
+
+--------------------------------------------------------------------------------
+22.01.2019
+
+IMPROVEMENT: Added a "game.itemheight" property to EDF game properties which
+             overrides item pickup height, which is set to 8 in Doom/Strife and
+             to 32 in Heretic/Hexen.
+
+--------------------------------------------------------------------------------
+20.01.2019
+
+BUGFIX: Fixed the wrong drawing of Heretic weapons when no status bar is drawn.
+        Added a "fullscreenoffset" floating-point field in weaponinfo for that,
+        because Heretic weapons have different hardcoded offsets.
+
+--------------------------------------------------------------------------------
+12.01.2019
+
+BUGFIX: Fixed polyobject doors which rotate more than 180 degrees from
+        malfunctioning when blocked by things when closing.
+
+IMPROVEMENT: Scrolling texture movement (including attached 3dmidtex) is now
+             interpolated.
+
+--------------------------------------------------------------------------------
+25.12.2018
+
+IMPROVEMENT: Chasecam and walkcam are now portal-aware. Interpolation is however
+             disabled.
+
+--------------------------------------------------------------------------------
+25.11.2018
+
+IMPROVEMENT: Now if an action is bound to more than one key, and two of the keys
+             are being pressed, releasing just one of them will not stop the
+             action. You need to release all of them.
+
+--------------------------------------------------------------------------------
+19.11.2018
+
+IMPROVEMENT: Changed how floating objects move in relation to portal
+             polyobjects. They no longer remain fixed relative to the inner
+             chamber sectors, but are shifted in the opposite direction, so they
+             appear as remaining fixed relative to the main world. This
+             behaviour is more consistent with how thing movement isn't
+             influenced by traditional vertically moving sectors, and more
+             stable as well than just adapting velocity when passing the portal.
+             It also avoids unrealistic direction changes when the containing
+             polyobject changes movement.
+
+             Polyobject portals now show in the map as part of the main area,
+             because indeed they rarely ever overlap anything vertically.
+
+--------------------------------------------------------------------------------
+17.11.2018
+
+BUGFIX: Interpolate the walkcam while the game is paused. Previously it would
+        only interpolate while the game was running, but the walkcam is one of
+        the few cameras controllable even while the game is paused.
+
+        Fixed a bug where the walkcam would move a bit backwards when opening
+        the console.
+
+        Fixed objects standing on the outer edges of portal polyobjects not up-
+        dating their floor reference Z, thus floating above ground when the
+        polyobject is gone from below them.
+
+IMPROVEMENT: Console movement is now interpolated.
+
+--------------------------------------------------------------------------------
+13.11.2018
+
+BUGFIX: Fixed edge-case situations where line portal teleportation would fail,
+        such as when sliding really slowly along a wall, or almost parallel to
+        one.
+
+        Also fixed several cases where portal interpolation would fail display-
+        ing correctly.
+
+--------------------------------------------------------------------------------
+05.07.2018
+
+BUGFIX: Fixed a problem where particles appeared in the wrong place, because of
+        nearby portals.
+
+--------------------------------------------------------------------------------
+29.06.2018
+
+IMPROVEMENT: Movement through portals is finally interpolated. No more hops or
+             slight discontinuities.
+
+--------------------------------------------------------------------------------
+27.06.2018
+
+BUGFIX: Fixed a situation where linedefs would still block despite being in
+        different portal layers.
+
+--------------------------------------------------------------------------------
+20.06.2018
+
+BUGFIX: Fixed a rare glitch, which would sometimes even crash the macOS-based
+        launcher app, due to malformed or otherwise bad IWAD file URLs.
+
+        Now building Eternity from macOS is easier, as the dependencies are
+        automatically downloaded.
+
+--------------------------------------------------------------------------------
+06.06.2018
+
+BUGFIX: Fixed a problem with the macOS launcher putting IWADs in the PWAD list
+        when user is alerted when attempting to start game with no IWAD.
+
+--------------------------------------------------------------------------------
+02.06.2018
+
+BUGFIX: Fixed a regression with portal autoaiming. It would sometimes fail when
+        attempting to aim through a sector portal.
+
+--------------------------------------------------------------------------------
+07.05.2018
+
+FEATURE: Added a CHASEFAST EDF game property flag. Needed to support Raven games
+         (Heretic and Hexen) where the monster A_Chase frames are speeded up on
+         -fast and skill 5.
+
+         Added the SKILL5FAST prefix flag for non-Decorate frame and framedelta
+         definitions, which supports halving the frame time on skill 5 and -fast
+         (Doom's demons), same as what Decorate has been having with "fast".
+
+--------------------------------------------------------------------------------
+06.05.2018
+
+BUGFIX: ChangeSkill (linedef special) must also update the fast parameters when
+        switching to or from nightmare or black plague mode.
+
+        Fixed a lockup caused by having an EDF animation block of different tex-
+        ture type than something already defined internally.
+
+--------------------------------------------------------------------------------
+03.05.2018
+
+FEATURE: Added absolute.push and absolute.hop to damagetype. Needed by Heretic's
+         powered staff.
+
+--------------------------------------------------------------------------------
+02.05.2018
+
+BUGFIX: The Heretic skills 1 and 5 now multiply the ammo per item correctly.
+
+FEATURE: Added game.skillammomultiplier EDF gameprop specifier to customize this.
+
+--------------------------------------------------------------------------------
+01.05.2018
+
+BUGFIX: Fixed a buffer reading runaway when a demo has no marker at the end.
+        Thanks to vita for the bug fix.
+
+        Disabled interpolation for polyobjects with portals, until we add inter-
+        polation for portal deltas and transforms. It was suffering from
+        flickering.
+
+--------------------------------------------------------------------------------
+29.04.2018
+
+BUGFIX: Sounds with "alias" or "random" entries didn't work correctly in sound
+        sequences with "playrepeat" and other similar commands.
+
+        Fixed wrong Heretic sound sequences, by adding more gamemode specific
+        implementations in EDF.
+
+        Fixed the ceiling movement sound sequence from being cut off on stop.
+        This was breaking mods which were replacing DSSTNMOV with something 
+        longer, which would only fully play when a ceiling stopped moving.
+
+--------------------------------------------------------------------------------
+28.04.2018
+
+FEATURE: Fixed Heretic pods to act properly. For this, I had to add five new
+         thing flags to Eternity, all in the flags4 list:
+
+         1. MONSTERPASS: makes the object pass through monster-blocking lines
+            even if it's not a player or friend.
+
+         2. LOWAIMPRIO: object has low autoaim priority, like MBF friends do.
+            Useful for destructible props as well.
+
+         3. STICKYCARRY: needed for the weird Heretic pod (and player) specific
+            behaviour. Players on top move with the object, and have difficulty
+            moving themselves off. They can also be carried upstairs.
+
+         4. SETTARGETONDEATH: target (attacker) is registered even when thing is
+            instantly killed on first hit. Normally the target is only changed
+            if the thing is alive, but Raven discovered this is not enough for
+            pods if they're used in a chain reaction to damage and provoke
+            monsters or score frags.
+
+         5. SLIDEOVERTHINGS: emulate Heretic 3D-clipping behaviour where
+            non-player things (notably pods) don't stop when falling on other
+            things, but instead keep moving until they fall or hit a wall.
+
+         Due to shared behaviour, the HereticPlayer thingtype also has 
+         STICKYCARRY.
+
+--------------------------------------------------------------------------------
+22.04.2018
+
+BUGFIX: Fixed a long-standing problem with double skies (feature from Hexen) not
+        working at all as expected.
+
+        Fixed an off-by-one overflow (otherwise harmless) which caused
+        transparent midtextures to show extra black (or index 0) pixels below
+        most columns.
+
+--------------------------------------------------------------------------------
+19.04.2018
+
+FEATURE: Added hitscan puff type EDF definitions, which is necessary for Heretic
+         support. Consideration has also been made for future Hexen and Strife
+         in Eternity. The syntax is as follows:
+
+         pufftype <name> [: <base>]
+         {
+           thingtype       <name>
+           sound           <name>
+           hitsound        <name>
+           hitpufftype     <name>
+           nobloodpufftype <name>
+           upspeed         <number>
+           zspread         <number>
+           punchhack       <name>
+           particles       <number>
+           +|-AlwaysPuff
+           +|-Bloodless
+           +|-LocalThrust
+           +|-RandomTics
+         }
+
+         effects.edf files have been added in base/doom and base/heretic.
+
+         Each pufftype defines how a hitscan attack should spawn a thing of a
+         given class, with options such as dragonclaw alternate blast, or Strife
+         mauler behaviour etc.
+
+IMPROVEMENT: Besides preparing all non-game-specific codepointers for setting
+             pufftype, Nailbomb is now fully customizable.
+
+IMPROVEMENT: Fixed the custom spread distribution of FireCustomBullets to be
+             triangular, just like the vanilla Doom hitscans.
+
+--------------------------------------------------------------------------------
+09.04.2018
+
+FEATURE: Added the push activation from Hexen. The feature was long advertised
+         in ExtraData (and later UDMF) but only now it has been implemented.
+
+--------------------------------------------------------------------------------
+31.03.2018
+
+IMPROVEMENT: Polyobjects are now properly cut off by 1-sided walls, instead of
+             their graphics "bleeding" through them when outside the playable
+             area.
+             
+BUGFIX: 2-sided polyobjects now show correctly in Eternity. The back side was
+        hidden, which was a regression from vanilla Hexen's polyobjects.
+
+--------------------------------------------------------------------------------
+30.03.2018
+
+FEATURE: Added Polyobj_MoveTo, Polyobj_MoveToSpot, Polyobj_OR_MoveTo and
+         Polyobj_OR_MoveToSpot, based on the GZDoom extensions.
+
+BUGFIX: Fixed the weird texture glitches happening with multiple polyobjects in 
+        a sector, some stationary and some moving.
+
+--------------------------------------------------------------------------------
+26.03.2018
+
+FEATURE: Incosistent linked portals between separate sector islands are now
+         supported! This means you can now place "wormholes" in the map without
+         getting errors! The link offsets are updated dynamically in order to 
+         provide a gameplay as good as possible.
+         
+         There is still a restriction left: do not place portals between two
+         areas already interconnected by sectors. That would still error out.
+         
+BUGFIX: Concealed sector portals were previously missed by the blockmap, 
+        resulting in buggy behaviour when clipping against things inside some
+        through-portal elevators.
+
+--------------------------------------------------------------------------------
 23.03.2018
 
 IMPROVEMENT: Polyobject movement is now interpolated, though moving portals not
