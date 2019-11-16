@@ -33,6 +33,7 @@
 #include "e_hash.h"
 #include "e_inventory.h"
 #include "e_lib.h"
+#include "e_player.h"
 #include "e_sprite.h"
 #include "e_string.h"
 
@@ -103,6 +104,7 @@ static MetaTable e_effectsTable;
 //
 // Add an item effect from a cfg_t definition.
 //
+static void E_convertKeywordEnumsToStrings(MetaTable &table);
 static itemeffect_t *E_addItemEffect(cfg_t *cfg)
 {
    itemeffect_t *table;
@@ -112,6 +114,7 @@ static itemeffect_t *E_addItemEffect(cfg_t *cfg)
       e_effectsTable.addObject((table = new itemeffect_t(name)));
 
    E_MetaTableFromCfg(cfg, table);
+   E_convertKeywordEnumsToStrings(*table);
 
    return table;
 }
@@ -167,6 +170,7 @@ MetaTable *E_GetItemEffects()
 #define KEY_AMMOGIVE       "ammo.give"
 #define KEY_CLASS          "class"
 #define KEY_CLASSNAME      "classname"
+#define KEY_CLRAMMOGIVEN   "clearammogiven"
 #define KEY_DROPAMOUNT     "dropamount"
 #define KEY_DURATION       "duration"
 #define KEY_FULLAMOUNTONLY "fullamountonly"
@@ -197,6 +201,8 @@ MetaTable *E_GetItemEffects()
 #define KEY_USESOUND       "usesound"
 #define KEY_WEAPON         "weapon"
 
+#define KEY_DELTA_NAME     "name"
+
 // Interned metatable keys
 static MetaKeyIndex keyAmount        (KEY_AMOUNT        );
 static MetaKeyIndex keyArtifactType  (KEY_ARTIFACTTYPE  );
@@ -215,64 +221,147 @@ static MetaKeyIndex keyUseEffect     (KEY_USEEFFECT     );
 static MetaKeyIndex keyUseAction     (KEY_USEACTION     );
 static MetaKeyIndex keyUseSound      (KEY_USESOUND      );
 static MetaKeyIndex keyArgs          (KEY_ARGS          );
+static MetaKeyIndex keyAmmoGiven     (KEY_AMMOGIVEN     );
 
 // Keys for specially treated artifact types
 static MetaKeyIndex keyBackpackItem  (ARTI_BACKPACKITEM );
 
+//
+// Temporary special values, starting from exceedingly remote negatives. They will be transformed
+// back to special strings, to prevent mistakenly using them accidentally.
+//
+enum
+{
+   E_SPECIAL_KEYWORD_MAXHEALTH,
+   E_SPECIAL_KEYWORD_SUPERHEALTH,
+   E_NUM_SPECIAL_KEYWORDS             // used when iterating
+};
+
+//
+// These must be in sync with the above enum's meaningful values
+//
+static const char *eSpecialKeyword[] =
+{
+   "@maxhealth",
+   "@superhealth",
+};
+
+//
+// Health special keyword support. The returned values will then be postprocessed and replaced with
+// actual metastrings
+//
+static int E_keywordCB(cfg_t *cfg, cfg_opt_t *opt, const char *value, void *result)
+{
+   for(int i = 0; i < E_NUM_SPECIAL_KEYWORDS; ++i)
+   {
+      if(!strcasecmp(value, eSpecialKeyword[i]))
+      {
+         *static_cast<int *>(result) = INT_MIN + 1 + i;
+         return 0;
+      }
+   }
+   char *endptr = nullptr;
+   long val = strtol(value, &endptr, 0);
+   if(*endptr)
+   {
+      if(cfg)
+         cfg_error(cfg, "invalid health value '%s' for option '%s'\n", value, opt->name);
+      return -1;
+   }
+   *static_cast<int *>(result) = static_cast<int>(val);
+   return 0;
+}
+
 // Health fields
+#define HEALTHFX_FIELDS \
+   CFG_INT_CB(KEY_AMOUNT,    0, CFGF_NONE, E_keywordCB), /* amount to recover          */   \
+   CFG_INT_CB(KEY_MAXAMOUNT, 0, CFGF_NONE, E_keywordCB), /* max that can be recovered  */   \
+   CFG_STR(KEY_LOWMESSAGE, "", CFGF_NONE), /* message if health < amount */   \
+                                                                              \
+   CFG_FLAG(KEY_ALWAYSPICKUP, 0, CFGF_SIGNPREFIX), /* if +, always pick up */ \
+   CFG_FLAG(KEY_SETHEALTH,    0, CFGF_SIGNPREFIX), /* if +, sets health    */ \
+                                                                              \
+   CFG_END()
+
 cfg_opt_t edf_healthfx_opts[] =
 {
-   CFG_INT(KEY_AMOUNT,     0,  CFGF_NONE), // amount to recover
-   CFG_INT(KEY_MAXAMOUNT,  0,  CFGF_NONE), // max that can be recovered
-   CFG_STR(KEY_LOWMESSAGE, "", CFGF_NONE), // message if health < amount
+   HEALTHFX_FIELDS
+};
 
-   CFG_FLAG(KEY_ALWAYSPICKUP, 0, CFGF_SIGNPREFIX), // if +, always pick up
-   CFG_FLAG(KEY_SETHEALTH,    0, CFGF_SIGNPREFIX), // if +, sets health
-
-   CFG_END()
+cfg_opt_t edf_healthfx_delta_opts[] =
+{
+   CFG_STR(KEY_DELTA_NAME, nullptr, CFGF_NONE),
+   HEALTHFX_FIELDS
 };
 
 // Armor fields
+#define ARMORFX_FIELDS \
+   CFG_INT(KEY_SAVEAMOUNT,    -1,  CFGF_NONE), /* amount of armor given          */                 \
+   CFG_INT(KEY_SAVEFACTOR,     1,  CFGF_NONE), /* numerator of save percentage   */                 \
+   CFG_INT(KEY_SAVEDIVISOR,    3,  CFGF_NONE), /* denominator of save percentage */                 \
+   CFG_INT(KEY_MAXSAVEAMOUNT,  0,  CFGF_NONE), /* max save amount, for bonuses   */                 \
+                                                                                                    \
+   CFG_FLAG(KEY_ALWAYSPICKUP,  0, CFGF_SIGNPREFIX), /* if +, always pick up                      */ \
+   CFG_FLAG(KEY_ADDITIVE,      0, CFGF_SIGNPREFIX), /* if +, adds to the current amount of armor */ \
+   CFG_FLAG(KEY_SETABSORPTION, 0, CFGF_SIGNPREFIX), /* if +, sets absorption values              */ \
+                                                                                                    \
+   CFG_END()
+
 cfg_opt_t edf_armorfx_opts[] =
 {
-   CFG_INT(KEY_SAVEAMOUNT,    -1,  CFGF_NONE), // amount of armor given
-   CFG_INT(KEY_SAVEFACTOR,     1,  CFGF_NONE), // numerator of save percentage
-   CFG_INT(KEY_SAVEDIVISOR,    3,  CFGF_NONE), // denominator of save percentage
-   CFG_INT(KEY_MAXSAVEAMOUNT,  0,  CFGF_NONE), // max save amount, for bonuses
+   ARMORFX_FIELDS
+};
 
-   CFG_FLAG(KEY_ALWAYSPICKUP,  0, CFGF_SIGNPREFIX), // if +, always pick up
-   CFG_FLAG(KEY_ADDITIVE,      0, CFGF_SIGNPREFIX), // if +, adds to the current amount of armor
-   CFG_FLAG(KEY_SETABSORPTION, 0, CFGF_SIGNPREFIX), // if +, sets absorption values
-
-   CFG_END()
+cfg_opt_t edf_armorfx_delta_opts[] =
+{
+   CFG_STR(KEY_DELTA_NAME, nullptr, CFGF_NONE),
+   ARMORFX_FIELDS
 };
 
 // Ammo giver fields
+#define AMMOFX_FIELDS \
+   CFG_STR(KEY_AMMO,       "", CFGF_NONE), /* name of ammo type artifact to give        */               \
+   CFG_INT(KEY_AMOUNT,     0,  CFGF_NONE), /* amount of ammo given                      */               \
+   CFG_INT(KEY_DROPAMOUNT, 0,  CFGF_NONE), /* amount of ammo given when item is dropped */               \
+                                                                                                         \
+   CFG_FLAG(KEY_IGNORESKILL, 0, CFGF_SIGNPREFIX), /* if +, does not double on skills that double ammo */ \
+                                                                                                         \
+   CFG_END()
+
 cfg_opt_t edf_ammofx_opts[] =
 {
-   CFG_STR(KEY_AMMO,       "", CFGF_NONE), // name of ammo type artifact to give
-   CFG_INT(KEY_AMOUNT,      0, CFGF_NONE), // amount of ammo given
-   CFG_INT(KEY_DROPAMOUNT,  0, CFGF_NONE), // amount of ammo given when item is dropped
+   AMMOFX_FIELDS
+};
 
-   CFG_FLAG(KEY_IGNORESKILL, 0, CFGF_SIGNPREFIX), // if +, does not double on skills that double ammo
-
-   CFG_END()
+cfg_opt_t edf_ammofx_delta_opts[] =
+{
+   CFG_STR(KEY_DELTA_NAME, nullptr, CFGF_NONE),
+   AMMOFX_FIELDS
 };
 
 // Powerup effect fields
+#define POWERFX_FIELDS \
+   CFG_INT(KEY_DURATION,  -1, CFGF_NONE), /* length of time to last         */                       \
+   CFG_STR(KEY_TYPE,      "", CFGF_NONE), /* name of powerup effect to give */                       \
+                                                                                                     \
+   CFG_FLAG(KEY_ADDITIVETIME,  0, CFGF_SIGNPREFIX), /* if +, adds to current duration */             \
+                                                                                                     \
+   CFG_FLAG(KEY_PERMANENT,     0, CFGF_SIGNPREFIX), /* if +, lasts forever                        */ \
+   CFG_FLAG(KEY_OVERRIDESSELF, 0, CFGF_SIGNPREFIX), /* if +, getting the power again while still  */ \
+                                                    /* under its influence is allowed (a la DOOM) */ \
+   /* TODO: support HUBPOWER and PERSISTENTPOWER properties, etc. */                                 \
+                                                                                                     \
+   CFG_END()
+
 cfg_opt_t edf_powerfx_opts[] =
 {
-   CFG_INT(KEY_DURATION,  -1, CFGF_NONE), // length of time to last
-   CFG_STR(KEY_TYPE,      "", CFGF_NONE), // name of powerup effect to give
+   POWERFX_FIELDS
+};
 
-   CFG_FLAG(KEY_ADDITIVETIME,  0, CFGF_SIGNPREFIX), // if +, adds to current duration
-
-   CFG_FLAG(KEY_PERMANENT,     0, CFGF_SIGNPREFIX), // if +, lasts forever
-   CFG_FLAG(KEY_OVERRIDESSELF, 0, CFGF_SIGNPREFIX), // if +, getting the power again while still
-                                                    // under its influence is allowed (a la DOOM)
-   // TODO: support HUBPOWER and PERSISTENTPOWER properties, etc.
-
-   CFG_END()
+cfg_opt_t edf_powerfx_delta_opts[] =
+{
+   CFG_STR(KEY_DELTA_NAME, nullptr, CFGF_NONE),
+   POWERFX_FIELDS
 };
 
 // NOTE TO SELF: Ratio in DOOMs is 2N, N, 5N, N
@@ -287,11 +376,21 @@ static cfg_opt_t ammogiven_opts[] =
 };
 
 // Weapon Giver effect fields
+#define WEAPONFX_FIELDS \
+   CFG_STR(KEY_WEAPON,       "",             CFGF_NONE             ), /* name of weapon to give             */ \
+   CFG_MVPROP(KEY_AMMOGIVEN, ammogiven_opts, CFGF_MULTI|CFGF_NOCASE), /* type and quantities of ammos given */ \
+   CFG_END()
+
 cfg_opt_t edf_weapgfx_opts[] =
 {
-   CFG_STR(KEY_WEAPON,                   "", CFGF_NONE),  // name of weapon to give
-   CFG_MVPROP(KEY_AMMOGIVEN, ammogiven_opts, CFGF_MULTI), // type and quantities of ammos given
-   CFG_END()
+   WEAPONFX_FIELDS
+};
+
+cfg_opt_t edf_weapgfx_delta_opts[] =
+{
+   CFG_STR(KEY_DELTA_NAME,    nullptr, CFGF_NONE),
+   CFG_FLAG(KEY_CLRAMMOGIVEN, 0,       CFGF_NONE),
+   WEAPONFX_FIELDS
 };
 
 // Artifact subtype names
@@ -333,46 +432,60 @@ static int E_artiTypeCB(cfg_t *cfg, cfg_opt_t *opt, const char *value, void *res
 //
 static int E_actionFuncCB(cfg_t *cfg, cfg_opt_t *opt, int argc, const char **argv)
 {
-   if(argc > 0)
+   if(argc > EMAXARGS)
+   {
+      E_EDFLoggedWarning(2, "E_actionFuncCB: More than 16 args specified for artifact '%s'\n",
+                         cfg->title);
+   }
+   else if(argc > 0)
       cfg_setlistptr(cfg, KEY_ARGS, argc, static_cast<const void *>(argv));
 
    return 0; // everything is good
 }
 
 // Artifact fields
+#define ARTIFACT_FIELDS \
+   CFG_INT(KEY_AMOUNT,          1,  CFGF_NONE), /* amount gained with one pickup               */    \
+   CFG_INT(KEY_MAXAMOUNT,       1,  CFGF_NONE), /* max amount that can be carried in inventory */    \
+   CFG_INT(KEY_INTERHUBAMOUNT,  0,  CFGF_NONE), /* amount carryable between hubs (or levels)   */    \
+   CFG_INT(KEY_SORTORDER,       0,  CFGF_NONE), /* relative ordering within inventory          */    \
+   CFG_STR(KEY_ICON,            "", CFGF_NONE), /* icon used on inventory bars                 */    \
+   CFG_INT(KEY_ICON_XOFFS,      0,  CFGF_NONE), /* x offset of icon (+ is left)                */    \
+   CFG_INT(KEY_ICON_YOFFS,      0,  CFGF_NONE), /* y offset of icon (+ is right)               */    \
+   CFG_STR(KEY_USESOUND,        "", CFGF_NONE), /* sound to play when used                     */    \
+   CFG_STR(KEY_USEEFFECT,       "", CFGF_NONE), /* effect to activate when used                */    \
+                                                                                                     \
+   CFG_FLAG(KEY_UNDROPPABLE,    0, CFGF_SIGNPREFIX), /* if +, cannot be dropped                   */ \
+   CFG_FLAG(KEY_INVBAR,         0, CFGF_SIGNPREFIX), /* if +, appears in inventory bar            */ \
+   CFG_FLAG(KEY_KEEPDEPLETED,   0, CFGF_SIGNPREFIX), /* if +, remains in inventory if amount is 0 */ \
+   CFG_FLAG(KEY_FULLAMOUNTONLY, 0, CFGF_SIGNPREFIX), /* if +, pick up for full amount only        */ \
+   CFG_FLAG(KEY_NOSHAREWARE,    0, CFGF_SIGNPREFIX), /* if +, non-shareware                       */ \
+                                                                                                     \
+   CFG_INT_CB(KEY_ARTIFACTTYPE, ARTI_NORMAL, CFGF_NONE, E_artiTypeCB), /* artifact sub-type */       \
+                                                                                                     \
+   CFG_STRFUNC(KEY_USEACTION,  "NULL",                  E_actionFuncCB), /* action function */       \
+   CFG_STR(KEY_ARGS,           0,            CFGF_LIST),                                             \
+                                                                                                     \
+                                                                                                     \
+   /* Sub-Type Specific Fields */                                                                    \
+   /* These only have meaning if the value of artifacttype is the expected value. */                 \
+   /* You can set the keys on other artifacts, but they'll have no effect. */                        \
+                                                                                                     \
+   /* Ammo sub-type */                                                                               \
+   CFG_INT(KEY_BACKPACKAMOUNT, 0, CFGF_NONE),                                                        \
+   CFG_INT(KEY_BACKPACKMAXAMT, 0, CFGF_NONE),                                                        \
+                                                                                                     \
+   CFG_END()
+
 cfg_opt_t edf_artifact_opts[] =
 {
-   CFG_INT(KEY_AMOUNT,          1, CFGF_NONE), // amount gained with one pickup
-   CFG_INT(KEY_MAXAMOUNT,       1, CFGF_NONE), // max amount that can be carried in inventory
-   CFG_INT(KEY_INTERHUBAMOUNT,  0, CFGF_NONE), // amount carryable between hubs (or levels)
-   CFG_INT(KEY_SORTORDER,       0, CFGF_NONE), // relative ordering within inventory
-   CFG_STR(KEY_ICON,           "", CFGF_NONE), // icon used on inventory bars
-   CFG_INT(KEY_ICON_XOFFS,      0, CFGF_NONE), // x offset of icon (+ is left)
-   CFG_INT(KEY_ICON_YOFFS,      0, CFGF_NONE), // y offset of icon (+ is right)
-   CFG_STR(KEY_USESOUND,       "", CFGF_NONE), // sound to play when used
-   CFG_STR(KEY_USEEFFECT,      "", CFGF_NONE), // effect to activate when used
+   ARTIFACT_FIELDS
+};
 
-   CFG_FLAG(KEY_UNDROPPABLE,    0, CFGF_SIGNPREFIX), // if +, cannot be dropped
-   CFG_FLAG(KEY_INVBAR,         0, CFGF_SIGNPREFIX), // if +, appears in inventory bar
-   CFG_FLAG(KEY_KEEPDEPLETED,   0, CFGF_SIGNPREFIX), // if +, remains in inventory if amount is 0
-   CFG_FLAG(KEY_FULLAMOUNTONLY, 0, CFGF_SIGNPREFIX), // if +, pick up for full amount only
-   CFG_FLAG(KEY_NOSHAREWARE,    0, CFGF_SIGNPREFIX), // if +, non-shareware
-
-   CFG_INT_CB(KEY_ARTIFACTTYPE, ARTI_NORMAL, CFGF_NONE, E_artiTypeCB), // artifact sub-type
-
-   CFG_STRFUNC(KEY_USEACTION,  "NULL",                  E_actionFuncCB), // action function
-   CFG_STR(KEY_ARGS,                0,       CFGF_LIST),
-
-
-   // Sub-Type Specific Fields
-   // These only have meaning if the value of artifacttype is the expected value.
-   // You can set the keys on other artifacts, but they'll have no effect.
-
-   // Ammo sub-type
-   CFG_INT(KEY_BACKPACKAMOUNT, 0, CFGF_NONE),
-   CFG_INT(KEY_BACKPACKMAXAMT, 0, CFGF_NONE),
-
-   CFG_END()
+cfg_opt_t edf_artifact_delta_opts[] =
+{
+   CFG_STR(KEY_DELTA_NAME, nullptr, CFGF_NONE),
+   ARTIFACT_FIELDS
 };
 
 static const char *e_ItemSectionNames[NUMITEMFX] =
@@ -385,6 +498,75 @@ static const char *e_ItemSectionNames[NUMITEMFX] =
    EDF_SEC_WEAPGFX,
    EDF_SEC_ARTIFACT
 };
+
+static const char *e_ItemDeltaSectionNames[NUMITEMFX] =
+{
+   "",
+   EDF_SEC_HEALTHFXDELTA,
+   EDF_SEC_ARMORFXDELTA,
+   EDF_SEC_AMMOFXDELTA,
+   EDF_SEC_POWERFXDELTA,
+   EDF_SEC_WEAPGFXDELTA,
+   EDF_SEC_ARTIFACTDELTA
+};
+
+//
+// Some delta properties need special handling, so that's done here
+//
+static void E_handleSpecialItemDeltaProperties(const int i, cfg_t *sec, MetaTable *table,
+                                               const char *const name)
+{
+   if(i == ITEMFX_WEAPONGIVER && cfg_size(sec, KEY_CLRAMMOGIVEN) > 0)
+   {
+      do
+      {
+         table->removeMetaTableNR(keyAmmoGiven);
+      } while(metaerrno == META_ERR_NOERR);
+   }
+   else if(i == ITEMFX_ARTIFACT &&
+           (cfg_size(sec, KEY_USEACTION) > 0 || cfg_size(sec, KEY_ARGS) > 0))
+   {
+      do
+      {
+         table->removeString(keyArgs);
+      } while(metaerrno == META_ERR_NOERR);
+   }
+}
+
+//
+// Converts any ultra-negative special values back to metastrings, for safety in case they leak
+// elsewhere.
+//
+static void E_convertKeywordEnumsToStrings(MetaTable &table)
+{
+   // basic recursion defense
+   if(table.getInt(__func__, 0))
+      return;
+   table.setInt(__func__, 1);
+
+   MetaInteger *mint = nullptr;
+   while((mint = table.getNextTypeEx(mint)))
+   {
+      // Remove any prior const string for any scanned metaint
+      table.removeConstString(mint->getKeyIdx());
+      for(int i = 0; i < E_NUM_SPECIAL_KEYWORDS; ++i)
+      {
+         if(mint->getValue() != INT_MIN + 1 + i)
+            continue;
+         table.setConstString(mint->getKeyIdx(), eSpecialKeyword[i]);
+         table.removeObject(mint);
+         delete mint;
+         mint = nullptr;   // restart search when deleting stuff
+         break;
+      }
+   }
+
+   MetaTable *subtable = nullptr;
+   while((subtable = table.getNextTypeEx(subtable)))  // also go recursively
+      E_convertKeywordEnumsToStrings(*subtable);
+
+   table.removeInt(__func__);
+}
 
 //
 // E_processItemEffects
@@ -412,6 +594,36 @@ static void E_processItemEffects(cfg_t *cfg)
 
          E_EDFLogPrintf("\t\t* Processed item '%s'\n", newEffect->getKey());
       }
+
+
+      cfgSecName  = e_ItemDeltaSectionNames[i];
+      numSections = cfg_size(cfg, cfgSecName);
+
+      E_EDFLogPrintf("\t* Processing %s item effect deltas (%u defined)\n",
+                     className, numSections);
+
+      // process each section of the current delta type
+      for(unsigned int secNum = 0; secNum < numSections; secNum++)
+      {
+         cfg_t      *sec  = cfg_getnsec(cfg, cfgSecName, secNum);
+         const char *name = cfg_getstr(sec, KEY_DELTA_NAME);
+         if(estrempty(name))  // invalid name?
+            continue;
+         auto table = e_effectsTable.getObjectKeyAndTypeEx<MetaTable>(name);
+         if(!table)  // nothing to delta
+            continue;
+
+         E_handleSpecialItemDeltaProperties(i, sec, table, name);
+
+         MetaTable base(*table); // store the base entries in a copy
+
+         // Update table
+         E_MetaTableFromCfg(sec, table, &base);
+         E_convertKeywordEnumsToStrings(*table);
+
+         E_EDFLogPrintf("\t\t* Processed item delta %u to '%s'\n", secNum, name);
+      }
+
    }
 }
 
@@ -427,11 +639,17 @@ static void E_generateWeaponTrackers()
 
    for(int i = 0; i < NUMWEAPONTYPES; i++)
    {
-      weaponinfo_t *currWeapon = E_WeaponForID(i);
-      itemeffect_t *currTracker = new itemeffect_t(currWeapon->name);
-      e_effectsTable.addObject(currTracker);
-      trackerTemplate->copyTableTo(currTracker);
-      currWeapon->tracker = currTracker;
+      weaponinfo_t *currWeapon  = E_WeaponForID(i);
+      itemeffect_t *currTracker = E_ItemEffectForName(currWeapon->name);
+      if(currTracker != nullptr)
+         currWeapon->tracker = currTracker;
+      else
+      {
+         currTracker = new itemeffect_t(currWeapon->name);
+         e_effectsTable.addObject(currTracker);
+         trackerTemplate->copyTableTo(currTracker);
+         currWeapon->tracker = currTracker;
+      }
    }
 }
 
@@ -1535,7 +1753,6 @@ void E_TryUseItem(player_t *player, inventoryitemid_t ID)
    {
       if(artifact->getInt(keyArtifactType, -1) == ARTI_NORMAL)
       {
-         bool shiftinvleft = false;
          bool success = false;
 
          const char *useeffectstr = artifact->getString(keyUseEffect, "");
@@ -1599,8 +1816,7 @@ void E_TryUseItem(player_t *player, inventoryitemid_t ID)
          if(success)
          {
             const char *sound;
-            if(E_RemoveInventoryItem(player, artifact, 1) == INV_REMOVEDSLOT)
-               shiftinvleft = true;
+            E_RemoveInventoryItem(player, artifact, 1);
 
             sound = artifact->getString(keyUseSound, "");
             if(estrnonempty(sound))
@@ -1611,12 +1827,9 @@ void E_TryUseItem(player_t *player, inventoryitemid_t ID)
          else
          {
             // Heretic shifts inventory one left if you fail to use your selected item.
-            shiftinvleft = true;
-         }
-
-         // FIXME: Make this behaviour optional, or remove
-         if(shiftinvleft)
+            // FIXME: Make this behaviour optional, or remove
             E_MoveInventoryCursor(player, -1, player->inv_ptr);
+         }
       }
    }
 }
@@ -2035,6 +2248,8 @@ static void E_removeInventorySlot(const player_t *player, inventoryslot_t *slot)
          inventory[e_maxitemid - 1].item   = -1;
          inventory[e_maxitemid - 1].amount =  0;
 
+         E_MoveInventoryCursor(player, -1, const_cast<int &>(player->inv_ptr));
+
          return;
       }
    }
@@ -2142,6 +2357,25 @@ void E_ClearInventory(player_t *player)
 int E_GetInventoryAllocSize()
 {
    return e_maxitemid;
+}
+
+//
+// Gets the actual health if special
+//
+int E_GetPClassHealth(const itemeffect_t &effect, size_t keyIndex, const playerclass_t &pclass,
+                      int def)
+{
+   const char *keyword = effect.getConstString(keyIndex, nullptr);
+   if(keyword == eSpecialKeyword[E_SPECIAL_KEYWORD_MAXHEALTH])
+      return pclass.maxhealth;
+   if(keyword == eSpecialKeyword[E_SPECIAL_KEYWORD_SUPERHEALTH])
+      return pclass.superhealth;
+   return effect.getInt(keyIndex, def);
+}
+int E_GetPClassHealth(const itemeffect_t &effect, const char *key, const playerclass_t &pclass,
+                      int def)
+{
+   return E_GetPClassHealth(effect, MetaKeyIndex(key), pclass, def);
 }
 
 //=============================================================================

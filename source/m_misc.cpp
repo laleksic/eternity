@@ -67,6 +67,11 @@
 #include "st_stuff.h"
 #include "v_video.h"
 
+#ifdef HAVE_ADLMIDILIB
+#include "adlmidi.h"
+#endif
+
+
 //
 // DEFAULTS
 //
@@ -78,6 +83,7 @@ extern double mouseSensitivity_horiz,mouseSensitivity_vert;  // killough
 extern bool mouseSensitivity_vanilla; // [CG] 01/20/12
 extern int leds_always_off;            // killough 3/6/98
 extern int showMessages;
+extern int mess_align;
 extern int screenSize;
 
 extern char *chat_macros[], *wad_files[], *deh_files[];  // killough 10/98
@@ -98,6 +104,15 @@ extern int  endoomdelay;
 #ifdef HAVE_SPCLIB
 extern int spc_preamp;
 extern int spc_bass_boost;
+#endif
+
+#ifdef HAVE_ADLMIDILIB
+extern int midi_device;
+extern int adlmidi_numchips;
+extern int adlmidi_bank;
+extern int adlmidi_emulator;
+
+const int BANKS_MAX = (adl_getBanksCount() - 1);
 #endif
 
 // haleyjd 10/09/07: wipe waiting
@@ -304,6 +319,9 @@ default_t defaults[] =
    DEFAULT_INT("show_messages", &showMessages, NULL, 1, 0, 1, default_t::wad_no,
                "1 to enable message display"),
 
+   DEFAULT_INT("message_alignment", &mess_align, NULL, 0, 0, 2, default_t::wad_no,
+               "0 for default, 1 for left-aligned, 2 for centered"),
+
    DEFAULT_INT("mess_colour", &mess_colour, NULL, CR_RED, 0, CR_BUILTIN, default_t::wad_no,
                "messages colour"),
 
@@ -361,7 +379,7 @@ default_t defaults[] =
                0, 0, 1, default_t::wad_yes, "Monsters can telefrag on MAP30"),
 
    DEFAULT_INT("comp_dropoff", &default_comp[comp_dropoff], &comp[comp_dropoff],
-               0, 0, 1, default_t::wad_yes, "Some objects never move over tall ledges"),
+               1, 0, 1, default_t::wad_yes, "Some objects never move over tall ledges"),
 
    DEFAULT_INT("comp_falloff", &default_comp[comp_falloff], &comp[comp_falloff],
                0, 0, 1, default_t::wad_yes, "Objects don't fall off ledges under their own weight"),
@@ -423,13 +441,13 @@ default_t defaults[] =
    
    // haleyjd 02/15/02: z checks (includes,supercedes comp_scratch)
    DEFAULT_INT("comp_overunder", &default_comp[comp_overunder], &comp[comp_overunder],
-               1, 0, 1, default_t::wad_yes, "Things not fully clipped with respect to z coord"),
+               0, 0, 1, default_t::wad_yes, "Things not fully clipped with respect to z coord"),
    
    DEFAULT_INT("comp_theights", &default_comp[comp_theights], &comp[comp_theights],
-               1, 0, 1, default_t::wad_yes, "DOOM thingtypes use inaccurate height information"),
+               0, 0, 1, default_t::wad_yes, "DOOM thingtypes use inaccurate height information"),
    
    DEFAULT_INT("comp_planeshoot", &default_comp[comp_planeshoot], &comp[comp_planeshoot],
-               1, 0, 1, default_t::wad_yes, "Tracer shots cannot hit the floor or ceiling"),
+               0, 0, 1, default_t::wad_yes, "Tracer shots cannot hit the floor or ceiling"),
 
    DEFAULT_INT("comp_special", &default_comp[comp_special], &comp[comp_special],
                0, 0, 1, default_t::wad_yes, "One-time line specials are cleared on failure"),
@@ -438,7 +456,7 @@ default_t defaults[] =
                0, 0, 1, default_t::wad_yes, "Silent spawns at W/SW/S-facing DM spots"),
    
    DEFAULT_INT("comp_aircontrol", &default_comp[comp_aircontrol], &comp[comp_aircontrol],
-               1, 0, 1, default_t::wad_yes, "Disable air control for jumping"),
+               1, 0, 1, default_t::wad_yes, "Disable jumping for DOOM/Heretic"),
 
    // For key bindings, the values stored in the key_* variables       // phares
    // are the internal Doom Codes. The values stored in the default.cfg
@@ -834,6 +852,21 @@ default_t defaults[] =
                "bass boost for SPC music (logarithmic scale, 8 = normal)"),
    
 #endif
+
+#ifdef HAVE_ADLMIDILIB
+   DEFAULT_INT("snd_mididevice", &midi_device, NULL, -1, -1, 0, default_t::wad_yes,
+               "device used for MIDI playback"),
+
+   DEFAULT_INT("snd_oplemulator", &adlmidi_emulator, NULL, ADLMIDI_EMU_DOSBOX, 0, ADLMIDI_EMU_end - 1, default_t::wad_no,
+               "TODO: adlmidi_bank description"),
+
+   DEFAULT_INT("snd_numchips", &adlmidi_numchips, NULL, 2, 1, 8, default_t::wad_yes,
+               "TODO: adlmidi_numcards description"),
+
+   DEFAULT_INT("snd_bank", &adlmidi_bank, NULL, 72, 0, BANKS_MAX, default_t::wad_yes,
+               "TODO: adlmidi_bank description"),
+#endif
+
 
    // last entry
    DEFAULT_END()
@@ -1425,7 +1458,7 @@ void M_SaveDefaultFile(defaultfile_t *df)
    //M_NormalizeSlashes(tmpfile);
 
    errno = 0;
-   if(!(f = fopen(tmpfile.constPtr(), "w")))  // killough 9/21/98
+   if(!(f = fopen(tmpfile.constPtr(), "w+")))  // killough 9/21/98
    {
       M_defaultFileWriteError(df, tmpfile.constPtr());
       return;
@@ -1497,20 +1530,26 @@ void M_SaveDefaultFile(defaultfile_t *df)
       }
    }
 
-   if(fclose(f) == EOF)
+   rewind(f);
+
+   FILE *destf;
+   if(!(destf = fopen(df->fileName, "w")))
    {
-      M_defaultFileWriteError(df, tmpfile.constPtr());
+      M_defaultFileWriteError(df, df->fileName);
       return;
    }
 
-   remove(df->fileName);
+   for(char ch = fgetc(f); ch != EOF; ch = fgetc(f))
+      fputc(ch, destf);
 
-   if(rename(tmpfile.constPtr(), df->fileName))
-   {
-      // haleyjd 01/29/11: No error here, just print the message
-      printf("Warning: could not write defaults to %s: %s\n", df->fileName,
-              errno ? strerror(errno) : "(Unknown Error)");
-   }
+   // We don't care about errors at this stage
+   if(fclose(f) == EOF)
+      M_defaultFileWriteError(df, tmpfile.constPtr());
+
+   if(fclose(destf) == EOF)
+      M_defaultFileWriteError(df, df->fileName);
+
+   remove(tmpfile.constPtr());
 }
 
 //

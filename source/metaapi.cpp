@@ -767,6 +767,36 @@ void MetaTable::removeObject(MetaObject &object)
 }
 
 //
+// Removes and deletes all objects of the given key and (optionally) type
+//
+void MetaTable::removeAndDeleteAllObjects(size_t keyIndex)
+{
+   MetaObject *obj;
+   while((obj = getNextObject(nullptr, keyIndex)))
+   {
+      removeObject(obj);
+      delete obj;
+   }
+}
+void MetaTable::removeAndDeleteAllObjects(const char *key)
+{
+   removeAndDeleteAllObjects(MetaKey(key).index);
+}
+void MetaTable::removeAndDeleteAllObjects(size_t keyIndex, const MetaObject::Type *type)
+{
+   MetaObject *obj;
+   while((obj = getObjectKeyAndType(keyIndex, type)))
+   {
+      removeObject(obj);
+      delete obj;
+   }
+}
+void MetaTable::removeAndDeleteAllObjects(const char *key, const MetaObject::Type *type)
+{
+   removeAndDeleteAllObjects(MetaKey(key).index, type);
+}
+
+//
 // MetaTable::getObject
 //
 // Returns the first object found in the metatable with the given key, 
@@ -1440,19 +1470,19 @@ void MetaTable::setString(const char *key, const char *newValue)
 // exists, you would need to call this routine until metaerrno is
 // set to META_ERR_NOSUCHOBJECT.
 //
-// When calling this routine, the value of the object is returned 
-// in case it is needed, and you will need to then free it yourself 
+// When calling this routine, the value of the object is returned
+// in case it is needed, and you will need to then free it yourself
 // using free(). If the return value is not needed, call
 // MetaTable::removeStringNR instead and the string value will be destroyed.
 //
-char *MetaTable::removeString(const char *key)
+char *MetaTable::removeString(size_t keyIndex)
 {
    MetaString *str;
    char *value;
 
    metaerrno = META_ERR_NOERR;
 
-   if(!(str = getObjectKeyAndTypeEx<MetaString>(key)))
+   if(!(str = getObjectKeyAndTypeEx<MetaString>(keyIndex)))
    {
       metaerrno = META_ERR_NOSUCHOBJECT;
       return nullptr;
@@ -1462,16 +1492,21 @@ char *MetaTable::removeString(const char *key)
 
    // Destroying the MetaString will destroy the value inside it too, unless we
    // get and then nullify its value manually. This is one reason why MetaTable
-   // is a friend to these basic types, as it makes some simple management 
-   // chores like this more efficient. Otherwise I'd have to estrdup the string 
+   // is a friend to these basic types, as it makes some simple management
+   // chores like this more efficient. Otherwise I'd have to estrdup the string
    // and that's stupid.
- 
+
    value = str->value;
    str->value = nullptr; // destructor does nothing if this is cleared first
 
    delete str;
 
    return value;
+}
+
+char *MetaTable::removeString(const char *key)
+{
+   return removeString(MetaKey(key).index);
 }
 
 //
@@ -1532,14 +1567,14 @@ void MetaTable::addConstString(const char *key, const char *value)
 // META_ERR_NOSUCHOBJECT. Otherwise, the string constant value is returned and
 // metaerrno is META_ERR_NOERR.
 //
-const char *MetaTable::getConstString(const char *key, const char *defValue) const
+const char *MetaTable::getConstString(size_t keyIndex, const char *defValue) const
 {
    const char *retval;
    const MetaConstString *obj;
 
    metaerrno = META_ERR_NOERR;
 
-   if(!(obj = getObjectKeyAndTypeEx<MetaConstString>(key)))
+   if(!(obj = getObjectKeyAndTypeEx<MetaConstString>(keyIndex)))
    {
       metaerrno = META_ERR_NOSUCHOBJECT;
       retval    = defValue;
@@ -1548,6 +1583,10 @@ const char *MetaTable::getConstString(const char *key, const char *defValue) con
       retval = obj->value;
 
    return retval;
+}
+const char *MetaTable::getConstString(const char *key, const char *defValue) const
+{
+   return getConstString(MetaKey(key).index, defValue);
 }
 
 //
@@ -1585,14 +1624,14 @@ void MetaTable::setConstString(const char *key, const char *newValue)
 // Otherwise, metaerrno is META_ERR_NOERR and the shared string value that 
 // was in the MetaConstString instance is returned.
 //
-const char *MetaTable::removeConstString(const char *key)
+const char *MetaTable::removeConstString(size_t keyIndex)
 {
    MetaConstString *str;
    const char *value;
 
    metaerrno = META_ERR_NOERR;
 
-   if(!(str = getObjectKeyAndTypeEx<MetaConstString>(key)))
+   if(!(str = getObjectKeyAndTypeEx<MetaConstString>(keyIndex)))
    {
       metaerrno = META_ERR_NOSUCHOBJECT;
       return nullptr;
@@ -1604,6 +1643,10 @@ const char *MetaTable::removeConstString(const char *key)
    delete str;
 
    return value;
+}
+const char *MetaTable::removeConstString(const char *key)
+{
+   return removeConstString(MetaKey(key).index);
 }
 
 //
@@ -1690,6 +1733,28 @@ void MetaTable::setMetaTable(size_t keyIndex, MetaTable *newValue)
 void MetaTable::setMetaTable(const char *key, MetaTable *newValue)
 {
    setMetaTable(MetaKey(key).index, newValue);
+}
+
+//
+// Removes a meta table from the table with the given key. If no such
+// object exists, metaerrno will be META_ERR_NOSUCHOBJECT and NULL is returned.
+// Otherwise, metaerrno is META_ERR_NOERR.
+//
+void MetaTable::removeMetaTableNR(size_t keyIndex)
+{
+   MetaTable *table;
+
+   metaerrno = META_ERR_NOERR;
+
+   if(!(table = getObjectKeyAndTypeEx<MetaTable>(keyIndex)))
+   {
+      metaerrno = META_ERR_NOSUCHOBJECT;
+      return;
+   }
+
+   removeObject(table);
+
+   delete table;
 }
 
 //
