@@ -1904,6 +1904,23 @@ static void D_DoomInit()
          if(M_CheckParm("-vanilla") > 0)
             G_SetOldDemoOptions();
 
+            /* Make sure that split screen works even if autostarted from commandline with -warp etc. */
+           for(int i = 1; i < localplayers; i++)
+           {
+               playeringame[i] = true;
+           }
+
+           if(localplayers > 1)
+           {
+               if(GameType == gt_single)
+               {
+                   GameType = gt_coop;
+                   G_SetDefaultDMFlags(0, false);
+               }
+               netgame = true;
+           }
+           /* *******/
+
          G_InitNewNum(startskill, startepisode, startmap);
          if(demorecording)
             G_BeginRecording();

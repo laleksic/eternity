@@ -170,6 +170,8 @@ extern bool fullscreen;
 
 void I_InitKeyboard();
 void I_InitMouse();
+void I_InitRawInput();
+void I_QuitRawInput();
 
 //=============================================================================
 //
@@ -540,12 +542,15 @@ void I_InitGraphics()
 
    // haleyjd 05/10/11: init mouse
    I_InitMouse();
+   
+   I_InitRawInput();
 
    //
    // enter graphics mode
    //
    
    atexit(I_ShutdownGraphics);
+   atexit(I_QuitRawInput);
    
    I_SetMode();
    

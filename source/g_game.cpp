@@ -187,8 +187,8 @@ bool mousearray[4];
 bool *mousebuttons = &mousearray[1];    // allow [-1]
 
 // mouse values are used once
-double  mousex;
-double  mousey;
+double  mousex[MAXLOCALPLAYERS];
+double  mousey[MAXLOCALPLAYERS];
 int     dclicktime;
 bool    dclickstate;
 int     dclicks;
@@ -482,22 +482,31 @@ void G_BuildTiccmd(ticcmd_t *cmd, int pnum)
    // sf: smooth out the mouse movement
    // change to use tmousex, y   
 
-   tmousex = mousex;
-   tmousey = mousey;
+   static double oldmousex[MAXLOCALPLAYERS]={0.0, 0.0, 0.0, 0.0};
+   static double oldmousey[MAXLOCALPLAYERS]={0.0, 0.0, 0.0, 0.0};
+   tmousex = mousex[pnum] - oldmousex[pnum];
+   tmousey = mousey[pnum] - oldmousey[pnum];
+   oldmousex[pnum] = mousex[pnum];
+   oldmousey[pnum] = mousey[pnum];
+   //if (pnum != 0) {
+    //~ printf("%d: %lf, %lf\n", pnum, tmousex, tmousey);
+   //}
 
    // we average the mouse movement as well
    // this is most important in smoothing movement
+   /*
    if(smooth_turning)
    {
-      static double oldmousex=0.0, mousex2;
-      static double oldmousey=0.0, mousey2;
+      static double oldmousex[MAXLOCALPLAYERS]={0.0, 0.0, 0.0, 0.0}, mousex2[MAXLOCALPLAYERS];
+      static double oldmousey[MAXLOCALPLAYERS]={0.0, 0.0, 0.0, 0.0}, mousey2[MAXLOCALPLAYERS];
 
-      mousex2 = tmousex; mousey2 = tmousey;
-      tmousex = (tmousex + oldmousex) / 2.0;        // average
-      oldmousex = mousex2;
-      tmousey = (tmousey + oldmousey) / 2.0;        // average
-      oldmousey = mousey2;
+      mousex2[pnum] = tmousex; mousey2[pnum] = tmousey;
+      tmousex = (tmousex + oldmousex[pnum]) / 2.0;        // average
+      oldmousex[pnum] = mousex2[pnum];
+      tmousey = (tmousey + oldmousey[pnum]) / 2.0;        // average
+      oldmousey[pnum] = mousey2[pnum];
    }
+   * */
 
    // YSHEAR_FIXME: add arrow keylook?
 
@@ -562,8 +571,11 @@ void G_BuildTiccmd(ticcmd_t *cmd, int pnum)
 
    if(gameactions[pnum][ka_strafe])
       side += (int)(tmousex * 2.0);
-   else
+   else {
       cmd->angleturn -= (int)(tmousex * 8.0);
+      //~ if (cmd->angleturn != 0)
+        //~ printf("angleturn %d %d\n", cmd->angleturn, pnum);
+   }
 
    if(forward > MAXPLMOVE)
       forward = MAXPLMOVE;
@@ -594,7 +606,12 @@ void G_BuildTiccmd(ticcmd_t *cmd, int pnum)
       cmd->buttons = BT_SPECIAL | BTS_SAVEGAME | (savegameslot << BTS_SAVESHIFT);
    }
 
-   mousex = mousey = 0.0;
+    // THE PROBLEM SEEMS TO BE HERE!!!
+    /*
+    for (int ply=0; ply<MAXLOCALPLAYERS; ++ply) {
+        mousex[ply] = mousey[ply] = 0.0;
+    }
+    */
 }
 
 //
@@ -682,9 +699,10 @@ void G_DoLoadLevel()
    {
        for(int i = 0; i < axis_max; i++)
            joyaxes[pnum][i] = 0.0;
+        
+        mousex[pnum] = mousey[pnum] = 0.0;
    }
 
-   mousex = mousey = 0.0;
    sendpause = sendsave = false;
    paused = 0;
    memset(mousearray,  0, sizeof(mousearray));
@@ -816,15 +834,16 @@ bool G_Responder(event_t* ev)
       // SoM: this mimics the doom2 behavior better. 
       if(mouseSensitivity_vanilla)
       {
-          mousex += (ev->data2 * (mouseSensitivity_horiz + 5.0) / 10.0);
-          mousey += (ev->data3 * (mouseSensitivity_vert + 5.0) / 10.0);
+          mousex[pnum] += (ev->data2 * (mouseSensitivity_horiz + 5.0) / 10.0);
+          mousey[pnum] += (ev->data3 * (mouseSensitivity_vert + 5.0) / 10.0);
       }
       else
       {
           // [CG] 01/20/12: raw sensitivity
-          mousex += (ev->data2 * mouseSensitivity_horiz / 10.0);
-          mousey += (ev->data3 * mouseSensitivity_vert / 10.0);
+          mousex[pnum] += (ev->data2 * mouseSensitivity_horiz / 10.0);
+          mousey[pnum] += (ev->data3 * mouseSensitivity_vert / 10.0);
       }
+      //~ printf("MOUSE pnum = %d :: %lf, %lf\n", pnum, mousex[pnum], mousey[pnum]);
 
       return true;    // eat events
       

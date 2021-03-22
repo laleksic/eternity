@@ -43,6 +43,9 @@
 #include "../v_misc.h"
 #include "../v_video.h"
 
+#define RAWINPUT_IMPL
+#include "rawinput.h"
+
 // Grab the mouse? (int type for config code)
 int         grabmouse;
 extern int  usemouse;   // killough 10/98
@@ -59,6 +62,324 @@ bool unicodeinput;
 void I_InitKeyboard();      // i_system.c
 
 bool MouseShouldBeGrabbed();
+
+static void I_AddDeferredEvent(const event_t &ev, int tic);
+
+// The devices "owned" by a given player
+struct Player_Devices {
+    void *kbd_tag;
+    void *mouse_tag;
+};
+
+static Player_Devices player_devices[MAXLOCALPLAYERS];
+
+// Return the player that "owns" the device with given tag
+static int ply_from_tag(void *tag) {
+    for (int i=0; i<MAXLOCALPLAYERS; ++i) {
+        if (tag == player_devices[i].kbd_tag || tag == player_devices[i].mouse_tag) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Returns next player without an "owned" keyboard
+static int next_ply_wo_kbd() {
+    for (int i=0; i<MAXLOCALPLAYERS; ++i) {
+        if (!player_devices[i].kbd_tag) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Returns next player without an "owned" mouse
+static int next_ply_wo_mouse() {
+    for (int i=0; i<MAXLOCALPLAYERS; ++i) {
+        if (!player_devices[i].mouse_tag) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static keycode_e I_TranslateRawKey(Raw_Key sym)
+{
+   int rc = 0;
+
+   switch(sym)
+   {
+   case RK_SPACE:       rc = KEYD_SPACEBAR;   break;
+   case RK_LEFT:        rc = KEYD_LEFTARROW;  break;
+   case RK_RIGHT:       rc = KEYD_RIGHTARROW; break;
+   case RK_DOWN:        rc = KEYD_DOWNARROW;  break;
+   case RK_UP:          rc = KEYD_UPARROW;    break;
+   case RK_ESC:         rc = KEYD_ESCAPE;     break;
+   case RK_ENTER:       rc = KEYD_ENTER;      break;
+   case RK_TAB:         rc = KEYD_TAB;        break;
+   case RK_F1:          rc = KEYD_F1;         break;
+   case RK_F2:          rc = KEYD_F2;         break;
+   case RK_F3:          rc = KEYD_F3;         break;
+   case RK_F4:          rc = KEYD_F4;         break;
+   case RK_F5:          rc = KEYD_F5;         break;
+   case RK_F6:          rc = KEYD_F6;         break;
+   case RK_F7:          rc = KEYD_F7;         break;
+   case RK_F8:          rc = KEYD_F8;         break;
+   case RK_F9:          rc = KEYD_F9;         break;
+   case RK_F10:         rc = KEYD_F10;        break;
+   case RK_F11:         rc = KEYD_F11;        break;
+   case RK_F12:         rc = KEYD_F12;        break;
+   case RK_BACKSPACE:   rc = KEYD_BACKSPACE;  break;
+   case RK_PAUSE:       rc = KEYD_PAUSE;      break;
+   case RK_EQUALS:      rc = KEYD_EQUALS;     break;
+   case RK_MINUS:       rc = KEYD_MINUS;      break;
+
+   case RK_NUMPAD_0:         rc = KEYD_KP0;        break;
+   case RK_NUMPAD_1:         rc = KEYD_KP1;        break;
+   case RK_NUMPAD_2:         rc = KEYD_KP2;        break;
+   case RK_NUMPAD_3:         rc = KEYD_KP3;        break;
+   case RK_NUMPAD_4:         rc = KEYD_KP4;        break;
+   case RK_NUMPAD_5:         rc = KEYD_KP5;        break;
+   case RK_NUMPAD_6:         rc = KEYD_KP6;        break;
+   case RK_NUMPAD_7:         rc = KEYD_KP7;        break;
+   case RK_NUMPAD_8:         rc = KEYD_KP8;        break;
+   case RK_NUMPAD_9:         rc = KEYD_KP9;        break;
+   case RK_NUMPAD_DOT:       rc = KEYD_KPPERIOD;   break;
+   case RK_NUMPAD_SLASH:     rc = KEYD_KPDIVIDE;   break;
+   case RK_NUMPAD_STAR:      rc = KEYD_KPMULTIPLY; break;
+   case RK_NUMPAD_MINUS:     rc = KEYD_KPMINUS;    break;
+   case RK_NUMPAD_PLUS:      rc = KEYD_KPPLUS;     break;
+   //~ case :    rc = KEYD_KPENTER;    break;
+   //~ case RK_NUMPAD_EQUALS:    rc = KEYD_KPEQUALS;   break;
+
+   case RK_NUM_LOCK:         rc = KEYD_NUMLOCK;    break;
+   case RK_SCROLL_LOCK:      rc = KEYD_SCROLLLOCK; break;
+   case RK_CAPS_LOCK:        rc = KEYD_CAPSLOCK;   break;
+   case RK_LSHIFT:
+   case RK_RSHIFT:           rc = KEYD_RSHIFT;     break;
+   case RK_LCTRL:
+   case RK_RCTRL:            rc = KEYD_RCTRL;      break;
+
+   case RK_LALT:
+   case RK_RALT:
+   case RK_LWIN:
+   case RK_RWIN:             rc = KEYD_RALT;       break;
+   case RK_PAGE_UP:          rc = KEYD_PAGEUP;     break;
+   case RK_PAGE_DOWN:        rc = KEYD_PAGEDOWN;   break;
+   case RK_HOME:             rc = KEYD_HOME;       break;
+   case RK_END:              rc = KEYD_END;        break;
+   case RK_INSERT:           rc = KEYD_INSERT;     break;
+   case RK_DELETE:           rc = KEYD_DEL;        break;
+   case RK_0: rc = SDLK_0; break;
+   case RK_1: rc = SDLK_1; break;
+   case RK_2: rc = SDLK_2; break;
+   case RK_3: rc = SDLK_3; break;
+   case RK_4: rc = SDLK_4; break;
+   case RK_5: rc = SDLK_5; break;
+   case RK_6: rc = SDLK_6; break;
+   case RK_7: rc = SDLK_7; break;
+   case RK_8: rc = SDLK_8; break;
+   case RK_9: rc = SDLK_9; break;
+   case RK_A: rc = SDLK_a; break;
+   case RK_B: rc = SDLK_b; break;
+   case RK_C: rc = SDLK_c; break;
+   case RK_D: rc = SDLK_d; break;
+   case RK_E: rc = SDLK_e; break;
+   case RK_F: rc = SDLK_f; break;
+   case RK_G: rc = SDLK_g; break;
+   case RK_H: rc = SDLK_h; break;
+   case RK_I: rc = SDLK_i; break;
+   case RK_J: rc = SDLK_j; break;
+   case RK_K: rc = SDLK_k; break;
+   case RK_L: rc = SDLK_l; break;
+   case RK_M: rc = SDLK_m; break;
+   case RK_N: rc = SDLK_n; break;
+   case RK_O: rc = SDLK_o; break;
+   case RK_P: rc = SDLK_p; break;
+   case RK_Q: rc = SDLK_q; break;
+   case RK_R: rc = SDLK_r; break;
+   case RK_S: rc = SDLK_s; break;
+   case RK_T: rc = SDLK_t; break;
+   case RK_U: rc = SDLK_u; break;
+   case RK_V: rc = SDLK_v; break;
+   case RK_W: rc = SDLK_w; break;
+   case RK_X: rc = SDLK_x; break;
+   case RK_Y: rc = SDLK_y; break;
+   case RK_Z: rc = SDLK_z; break;
+   case RK_BACKTICK: rc = KEYD_ACCGRAVE; break;
+   default:
+      rc = NUMKEYS;
+      break;
+   }
+   return (keycode_e)rc;
+}
+
+static int next_tag = 1;
+
+static void _on_key_down(void *tag, Raw_Key key, void *_) {
+    // Check if the virtual key is a mouse button or keyboard key
+    bool ismouse = (key == RK_LMB || key == RK_RMB || key == RK_MMB); 
+
+    // Check if this device is assigned to a player
+    int ply = ply_from_tag(tag);
+    if (ply < 0) {
+        // Not already assigned to a player, assign to next keyboard/mouse less player
+        if (ismouse) {
+            ply = next_ply_wo_mouse();
+            if (ply >= 0) {
+                player_devices[ply].mouse_tag = tag;
+            }         
+        } else {
+            ply = next_ply_wo_kbd();
+            if (ply >= 0) {
+                player_devices[ply].kbd_tag = tag;
+            }
+        }
+    } else {
+        // Assigned to a player, so we need to emit a Doom event here
+        event_t    d_event        = { ev_keydown, 0, 0, 0, '\0', ply };
+        event_t    mouseevent     = { ev_mouse,   0, 0, 0, '\0', ply };
+
+        switch (key) {
+            case RK_LMB:
+                d_event.data1 = KEYD_MOUSE1;
+                mouseevent.data1 = 1;
+                D_PostEvent(&d_event);
+                D_PostEvent(&mouseevent);
+            break;
+            case RK_RMB:
+                d_event.data1 = KEYD_MOUSE2;
+                mouseevent.data1 = 2;
+                D_PostEvent(&d_event);
+                D_PostEvent(&mouseevent);
+            break;
+            case RK_MMB:
+                d_event.data1 = KEYD_MOUSE3;
+                mouseevent.data1 = 4;
+                D_PostEvent(&d_event);
+                D_PostEvent(&mouseevent);
+            break;
+            default:
+                d_event.data1 = I_TranslateRawKey(key); 
+                if (d_event.data1 != NUMKEYS)
+                    D_PostEvent(&d_event);
+            break;
+        }
+    }
+}
+
+static void _on_key_up(void *tag, Raw_Key key, void *_) {
+    int ply = ply_from_tag(tag);
+    if (ply >= 0) {
+        // Assigned to a player, so we need to emit a Doom event here
+        event_t    d_event        = { ev_keyup, 0, 0, 0, '\0', ply };
+
+        switch (key) {
+            case RK_LMB:
+                d_event.data1 = KEYD_MOUSE1;
+                D_PostEvent(&d_event);
+            break;
+            case RK_RMB:
+                d_event.data1 = KEYD_MOUSE2;
+                D_PostEvent(&d_event);
+            break;
+            case RK_MMB:
+                d_event.data1 = KEYD_MOUSE3;
+                D_PostEvent(&d_event);
+            break;
+            default:
+                d_event.data1 = I_TranslateRawKey(key);            
+                if (d_event.data1 != NUMKEYS)
+                    D_PostEvent(&d_event);
+            break;
+        }
+    }
+}
+
+static void _on_rel(void *tag, Raw_Axis axis, int delta, void *_) {
+    int ply = ply_from_tag(tag);
+    if (ply >= 0) {
+        event_t    d_event        = { ev_keydown, 0, 0, 0, '\0', ply };
+        event_t    tempevent      = { ev_keyup,   0, 0, 0, '\0', ply };
+        event_t    mouseevent     = { ev_mouse,   0, 0, 0, '\0', ply };
+    
+        switch (axis) {
+            case RA_X:
+                mouseevent.data1 = SDL_MOUSEMOTION;
+                mouseevent.data2 = delta;
+                D_PostEvent(&mouseevent);
+                break;
+            
+            case RA_Y:
+                mouseevent.data1 = SDL_MOUSEMOTION;
+                mouseevent.data3 = -delta;
+                D_PostEvent(&mouseevent);
+                break;
+        
+            case RA_WHEEL:
+                if (delta > 0) {
+                    d_event.data1 = KEYD_MWHEELUP;
+                    D_PostEvent(&d_event);
+                    tempevent.data1 = KEYD_MWHEELUP;
+                    I_AddDeferredEvent(tempevent, gametic + 1);
+                } else if (delta < 0) {
+                    d_event.data1 = KEYD_MWHEELDOWN;
+                    D_PostEvent(&d_event);
+                    tempevent.data1 = KEYD_MWHEELDOWN;
+                    I_AddDeferredEvent(tempevent, gametic + 1);
+                }
+                break;
+        }
+    }
+}
+
+static void _on_plug(int idx, void* _) {
+    raw_open(idx, (void*)next_tag);
+    ++next_tag;
+}
+
+static void _on_unplug(void *tag, void *_) {
+    raw_close(tag);
+    for (int i=0; i<MAXLOCALPLAYERS; ++i) {
+        if (player_devices[i].kbd_tag == tag) {
+            player_devices[i].kbd_tag = 0;
+            return;
+        }
+        if (player_devices[i].mouse_tag == tag) {
+            player_devices[i].mouse_tag = 0;
+            return;
+        }
+    }
+}
+
+void I_InitRawInput() {
+    for (int i=0; i<MAXLOCALPLAYERS; ++i) {
+        memset(&player_devices[i], 0, sizeof(Player_Devices));
+    }
+
+   raw_init();
+   int dev_cnt = raw_dev_cnt();
+   for (int i=0; i<dev_cnt; ++i) {
+      raw_open(i, (void*)next_tag);
+      next_tag++;
+   }
+   printf("Detected %d devices.\n", dev_cnt);
+   #if __linux__ 
+   if (dev_cnt == 0) {
+      puts("Did you forget to make /dev/input/event* files readable by this user?");
+   }
+   #endif    
+   
+   raw_on_key_down(_on_key_down, NULL);
+   raw_on_key_up(_on_key_up, NULL);
+   raw_on_rel(_on_rel, NULL);
+   raw_on_plug(_on_plug, NULL);
+   raw_on_unplug(_on_unplug, NULL);
+}
+
+void I_QuitRawInput() {
+   raw_quit();
+}
 
 //=============================================================================
 //
@@ -424,6 +745,7 @@ static void CenterMouse()
 //
 static void I_ReadMouse()
 {
+/*
    int x, y;
    event_t ev;
    static Uint8 previous_state = 137;
@@ -459,6 +781,7 @@ static void I_ReadMouse()
 
    if(MouseShouldBeGrabbed())
       CenterMouse();
+*/
 }
 
 //
@@ -571,6 +894,8 @@ static void I_GetEvent()
    event_t    d_event        = { ev_keydown, 0, 0, 0, '\0', 0 };
    event_t    mouseevent     = { ev_mouse,   0, 0, 0, '\0', 0 };
    event_t    tempevent      = { ev_keydown, 0, 0, 0, '\0', 0 }; 
+   
+   raw_poll();
 
    // [CG] 01/31/2012: Ensure we have the latest info about focus and mouse
    //                  grabbing.
@@ -590,6 +915,7 @@ static void I_GetEvent()
 
       switch(ev.type)
       {
+      /*
       case SDL_KEYDOWN:
          d_event.type = ev_keydown;
          d_event.data1 = I_TranslateKey(ev.key.keysym.sym);
@@ -783,7 +1109,7 @@ static void I_GetEvent()
          if(d_event.data1)
             D_PostEvent(&d_event);
          break;
-
+      */
       case SDL_QUIT:
          MN_QuitDoom();
          break;
@@ -801,11 +1127,13 @@ static void I_GetEvent()
       }
    }
 
+/*
    if(sendmouseevent)
    {
       mouseevent.data1 = buttons;
       D_PostEvent(&mouseevent);
    }
+*/
 
    // SoM: if paused, delay for a short amount of time to allow other threads
    // to process on the system. Otherwise Eternity will use almost 100% of the
