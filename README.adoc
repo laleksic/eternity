@@ -1,6 +1,18 @@
 The Eternity Engine
 ===================
 
+Rawinput fork notes
+-------------------
+
+The rawinput fork allows multiple splitscreen players to each use their own mouse/keyboard pair to play. The new code is not well integrated into the UI but rather works as follows: The 1st keyboard to be pressed after starting the game is assigned to player 1, the 2nd to player 2 and so on. Same for mice.
+
+To play with splitscreen, open up the game, then open the console and type in +localplayers 2+ (or instead of 2, however split-screen players you want). Now restart the game. Press any key on the keyboard you wish player 1 to use. Press any mouse button on the mouse you wish player 1 to use. Now press any key on the keyboard you wish player 2 to use and press any button on the mouse you wish player 2 to use. Now you may play.
+
+The fork is powered by https://github.com/laleksic/rawinput[my cross-platform raw input library].
+
+Original readme
+---------------
+
 Eternity is an advanced http://doomwiki.org/wiki/Doom[DOOM] source
 port maintained by James ``Quasar'' Haley, descended from Simon
 ``fraggle'' Howard's SMMU. It has a whole host of advanced features
